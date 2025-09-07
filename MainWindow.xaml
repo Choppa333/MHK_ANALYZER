@@ -9,6 +9,28 @@
         Title="MGK Analyzer" Height="600" Width="1000"
         WindowStartupLocation="CenterScreen">
     
+    <Window.Resources>
+        <!-- 슬라이딩 애니메이션을 위한 스타일 -->
+        <Storyboard x:Key="SlideInStoryboard">
+            <DoubleAnimation Storyboard.TargetName="FileExplorerPanel"
+                           Storyboard.TargetProperty="Width"
+                           From="0" To="200" Duration="0:0:0.2">
+                <DoubleAnimation.EasingFunction>
+                    <CubicEase EasingMode="EaseOut"/>
+                </DoubleAnimation.EasingFunction>
+            </DoubleAnimation>
+        </Storyboard>
+        <Storyboard x:Key="SlideOutStoryboard">
+            <DoubleAnimation Storyboard.TargetName="FileExplorerPanel"
+                           Storyboard.TargetProperty="Width"
+                           From="200" To="0" Duration="0:0:0.15">
+                <DoubleAnimation.EasingFunction>
+                    <CubicEase EasingMode="EaseIn"/>
+                </DoubleAnimation.EasingFunction>
+            </DoubleAnimation>
+        </Storyboard>
+    </Window.Resources>
+    
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
@@ -148,14 +170,110 @@
             </Button>
         </ToolBar>
 
-        <!-- 메인 작업 영역 -->
-        <Grid Grid.Row="2" Background="WhiteSmoke">
-            <TextBlock Text="MGK Analyzer - 메인 작업 영역" 
-                       FontSize="24" 
-                       FontWeight="Light"
-                       HorizontalAlignment="Center" 
-                       VerticalAlignment="Center"
-                       Foreground="Gray"/>
+        <!-- 메인 작업 영역 with 파일 탐색기 -->
+        <Grid Grid.Row="2">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto"/>
+                <!-- 파일 탐색기 영역 -->
+                <ColumnDefinition Width="Auto"/>
+                <!-- GridSplitter -->
+                <ColumnDefinition Width="*"/>
+                <!-- 메인 컨텐츠 영역 -->
+            </Grid.ColumnDefinitions>
+
+            <!-- 숨겨진 상태의 탭 버튼 -->
+            <Border Grid.Column="0" x:Name="FileExplorerTab"
+                    Width="25" Background="#FF2D2D30" 
+                    BorderBrush="#FF3E3E42" BorderThickness="0,0,1,0"
+                    Cursor="Hand"
+                    MouseEnter="FileExplorerTab_MouseEnter"
+                    MouseDown="FileExplorerTab_MouseDown">
+                <StackPanel Orientation="Vertical" VerticalAlignment="Center">
+                    <TextBlock Text="📁" FontSize="14" Foreground="White" 
+                               HorizontalAlignment="Center" Margin="2"/>
+                    <TextBlock Text="F" FontSize="10" Foreground="#FFAAAAAA" 
+                               HorizontalAlignment="Center"/>
+                    <TextBlock Text="i" FontSize="10" Foreground="#FFAAAAAA" 
+                               HorizontalAlignment="Center"/>
+                    <TextBlock Text="l" FontSize="10" Foreground="#FFAAAAAA" 
+                               HorizontalAlignment="Center"/>
+                    <TextBlock Text="e" FontSize="10" Foreground="#FFAAAAAA" 
+                               HorizontalAlignment="Center"/>
+                    <TextBlock Text="s" FontSize="10" Foreground="#FFAAAAAA" 
+                               HorizontalAlignment="Center"/>
+                </StackPanel>
+            </Border>
+
+            <!-- 파일 탐색기 패널 -->
+            <Border Grid.Column="0" x:Name="FileExplorerPanel"
+                    Width="0" Background="#FFF5F5F5"
+                    BorderBrush="#FFCCCCCC" BorderThickness="0,0,1,0"
+                    ClipToBounds="True"
+                    MouseLeave="FileExplorerPanel_MouseLeave">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <!-- 헤더 -->
+                        <RowDefinition Height="*"/>
+                        <!-- 파일 트리 -->
+                    </Grid.RowDefinitions>
+
+                    <!-- 파일 탐색기 헤더 -->
+                    <Border Grid.Row="0" Background="#FFE1E1E1" 
+                            BorderBrush="#FFCCCCCC" BorderThickness="0,0,0,1"
+                            Height="30">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            
+                            <TextBlock Grid.Column="0" Text="파일 탐색기" 
+                                       FontSize="12" FontWeight="SemiBold"
+                                       VerticalAlignment="Center" Margin="8,0"/>
+                            
+                            <!-- 고정/해제 버튼 -->
+                            <ToggleButton Grid.Column="1" x:Name="PinButton"
+                                          Width="20" Height="20" Margin="5"
+                                          Content="📌" FontSize="10"
+                                          Checked="PinButton_Checked"
+                                          Unchecked="PinButton_Unchecked"
+                                          ToolTip="고정/해제"/>
+                        </Grid>
+                    </Border>
+
+                    <!-- 파일 트리뷰 -->
+                    <TreeView Grid.Row="1" x:Name="FileTreeView"
+                              Background="Transparent" BorderThickness="0"
+                              Margin="5" ScrollViewer.HorizontalScrollBarVisibility="Auto">
+                        <TreeView.ItemContainerStyle>
+                            <Style TargetType="TreeViewItem">
+                                <Setter Property="IsExpanded" Value="False"/>
+                                <Setter Property="FontSize" Value="11"/>
+                                <Setter Property="Padding" Value="2"/>
+                            </Style>
+                        </TreeView.ItemContainerStyle>
+                    </TreeView>
+                </Grid>
+            </Border>
+
+            <!-- GridSplitter for 리사이징 -->
+            <GridSplitter Grid.Column="1" x:Name="FileExplorerSplitter"
+                          Width="3" Background="#FFCCCCCC"
+                          HorizontalAlignment="Center"
+                          VerticalAlignment="Stretch"
+                          Visibility="Collapsed"
+                          IsEnabled="False"/>
+
+            <!-- 메인 컨텐츠 영역 -->
+            <Grid Grid.Column="2" Background="WhiteSmoke">
+                <TextBlock Text="MGK Analyzer - 메인 작업 영역" 
+                           FontSize="24" 
+                           FontWeight="Light"
+                           HorizontalAlignment="Center" 
+                           VerticalAlignment="Center"
+                           Foreground="Gray"/>
+            </Grid>
         </Grid>
 
         <!-- 상태바 -->
