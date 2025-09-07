@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Windows.Controls;
 using System.Windows.Media.Imaging;
+using System.Windows.Media;
 using MGK_Analyzer.Models;
 
 namespace MGK_Analyzer.Services
@@ -73,22 +74,19 @@ namespace MGK_Analyzer.Services
                 // 헤더 설정
                 var panel = new System.Windows.Controls.StackPanel { Orientation = System.Windows.Controls.Orientation.Horizontal };
                 
-                // 아이콘 추가
-                var icon = new System.Windows.Controls.TextBlock 
-                { 
-                    Text = GetFolderIcon(path), 
-                    FontSize = 12, 
-                    Margin = new System.Windows.Thickness(0, 0, 5, 0) 
-                };
+                // 폴더 아이콘 (이미지 기반)
+                var iconElement = CreateFolderIcon(path);
                 
                 // 폴더명 추가
                 var name = new System.Windows.Controls.TextBlock 
                 { 
                     Text = isRoot ? directoryInfo.FullName : directoryInfo.Name,
-                    FontSize = 11
+                    FontSize = 11,
+                    Margin = new System.Windows.Thickness(5, 0, 0, 0),
+                    VerticalAlignment = System.Windows.VerticalAlignment.Center
                 };
                 
-                panel.Children.Add(icon);
+                panel.Children.Add(iconElement);
                 panel.Children.Add(name);
                 item.Header = panel;
                 item.Tag = path;
@@ -157,7 +155,7 @@ namespace MGK_Analyzer.Services
                 // 접근 권한 없는 폴더는 무시
                 var accessDeniedItem = new TreeViewItem 
                 { 
-                    Header = CreateErrorHeader("??", "Access Denied"),
+                    Header = CreateErrorHeader("[X]", "Access Denied"),
                     IsEnabled = false 
                 };
                 parentItem.Items.Add(accessDeniedItem);
@@ -180,22 +178,19 @@ namespace MGK_Analyzer.Services
                 var panel = new System.Windows.Controls.StackPanel { Orientation = System.Windows.Controls.Orientation.Horizontal };
                 
                 // 파일 아이콘
-                var icon = new System.Windows.Controls.TextBlock 
-                { 
-                    Text = GetFileIcon(filePath), 
-                    FontSize = 12, 
-                    Margin = new System.Windows.Thickness(0, 0, 5, 0) 
-                };
+                var iconElement = CreateFileIcon(filePath);
                 
                 // 파일명
                 var name = new System.Windows.Controls.TextBlock 
                 { 
                     Text = fileInfo.Name,
                     FontSize = 11,
-                    Foreground = System.Windows.Media.Brushes.DarkBlue
+                    Foreground = System.Windows.Media.Brushes.DarkBlue,
+                    Margin = new System.Windows.Thickness(5, 0, 0, 0),
+                    VerticalAlignment = System.Windows.VerticalAlignment.Center
                 };
                 
-                panel.Children.Add(icon);
+                panel.Children.Add(iconElement);
                 panel.Children.Add(name);
                 item.Header = panel;
                 item.Tag = filePath;
@@ -209,11 +204,236 @@ namespace MGK_Analyzer.Services
             }
             catch (Exception ex)
             {
-                item.Header = CreateErrorHeader("?", $"Error: {Path.GetFileName(filePath)}");
+                item.Header = CreateErrorHeader("[!]", $"Error: {Path.GetFileName(filePath)}");
                 System.Diagnostics.Debug.WriteLine($"Error creating file tree item for {filePath}: {ex.Message}");
             }
 
             return item;
+        }
+
+        private System.Windows.FrameworkElement CreateFolderIcon(string path)
+        {
+            var icon = new System.Windows.Controls.TextBlock
+            {
+                FontFamily = new FontFamily("Segoe UI"),
+                FontSize = 14,
+                Width = 16,
+                Height = 16,
+                TextAlignment = System.Windows.TextAlignment.Center,
+                VerticalAlignment = System.Windows.VerticalAlignment.Center,
+                Foreground = GetFolderIconColor(path)
+            };
+
+            icon.Text = GetFolderIconText(path);
+            return icon;
+        }
+
+        private System.Windows.FrameworkElement CreateFileIcon(string filePath)
+        {
+            var icon = new System.Windows.Controls.TextBlock
+            {
+                FontFamily = new FontFamily("Segoe UI"),
+                FontSize = 12,
+                Width = 16,
+                Height = 16,
+                TextAlignment = System.Windows.TextAlignment.Center,
+                VerticalAlignment = System.Windows.VerticalAlignment.Center,
+                Foreground = GetFileIconColor(filePath)
+            };
+
+            icon.Text = GetFileIconText(filePath);
+            return icon;
+        }
+
+        private string GetFolderIconText(string path)
+        {
+            try
+            {
+                var folderName = Path.GetFileName(path).ToLower();
+                
+                return folderName switch
+                {
+                    "desktop" => "DT",
+                    "documents" => "DC",
+                    "downloads" => "DL",
+                    "pictures" => "PIC",
+                    "music" => "MUS",
+                    "videos" => "VID",
+                    "onedrive" => "OD",
+                    "dropbox" => "DB",
+                    "bin" or "debug" or "release" => "BIN",
+                    "obj" => "OBJ",
+                    ".git" => "GIT",
+                    ".vs" or ".vscode" => "IDE",
+                    "node_modules" => "NPM",
+                    _ => "DIR"
+                };
+            }
+            catch
+            {
+                return "DIR";
+            }
+        }
+
+        private string GetFileIconText(string filePath)
+        {
+            try
+            {
+                var extension = Path.GetExtension(filePath).ToLower();
+                
+                return extension switch
+                {
+                    // 텍스트 파일
+                    ".txt" => "TXT",
+                    ".md" => "MD",
+                    ".log" => "LOG",
+                    
+                    // 데이터 파일
+                    ".csv" => "CSV",
+                    ".json" => "JSON",
+                    ".xml" => "XML",
+                    ".yaml" or ".yml" => "YML",
+                    
+                    // 웹 파일
+                    ".html" or ".htm" => "HTML",
+                    ".css" => "CSS",
+                    ".js" => "JS",
+                    ".ts" => "TS",
+                    
+                    // 프로그래밍 파일
+                    ".cs" => "C#",
+                    ".py" => "PY",
+                    ".java" => "JAVA",
+                    ".cpp" or ".c" => "C++",
+                    ".h" => "H",
+                    ".sql" => "SQL",
+                    ".xaml" => "XAML",
+                    
+                    // 설정 파일
+                    ".config" => "CFG",
+                    ".ini" => "INI",
+                    
+                    // 오피스 문서
+                    ".doc" or ".docx" => "DOC",
+                    ".xls" or ".xlsx" => "XLS",
+                    ".ppt" or ".pptx" => "PPT",
+                    ".pdf" => "PDF",
+                    
+                    // 이미지 파일
+                    ".jpg" or ".jpeg" => "JPG",
+                    ".png" => "PNG",
+                    ".gif" => "GIF",
+                    ".bmp" => "BMP",
+                    ".ico" => "ICO",
+                    ".svg" => "SVG",
+                    
+                    // 압축 파일
+                    ".zip" => "ZIP",
+                    ".rar" => "RAR",
+                    ".7z" => "7Z",
+                    ".tar" or ".gz" => "TAR",
+                    
+                    // 실행 파일
+                    ".exe" => "EXE",
+                    ".msi" => "MSI",
+                    ".bat" or ".cmd" => "BAT",
+                    ".ps1" => "PS1",
+                    
+                    // 기본
+                    _ => "FILE"
+                };
+            }
+            catch
+            {
+                return "FILE";
+            }
+        }
+
+        private Brush GetFolderIconColor(string path)
+        {
+            try
+            {
+                var folderName = Path.GetFileName(path).ToLower();
+                
+                return folderName switch
+                {
+                    "desktop" => Brushes.Blue,
+                    "documents" => Brushes.DarkGreen,
+                    "downloads" => Brushes.Orange,
+                    "pictures" => Brushes.Purple,
+                    "music" => Brushes.DeepPink,
+                    "videos" => Brushes.DarkRed,
+                    "onedrive" => Brushes.SkyBlue,
+                    "dropbox" => Brushes.Blue,
+                    "bin" or "debug" or "release" => Brushes.Gray,
+                    "obj" => Brushes.LightGray,
+                    ".git" => Brushes.OrangeRed,
+                    ".vs" or ".vscode" => Brushes.Blue,
+                    "node_modules" => Brushes.Green,
+                    _ => Brushes.Goldenrod
+                };
+            }
+            catch
+            {
+                return Brushes.Goldenrod;
+            }
+        }
+
+        private Brush GetFileIconColor(string filePath)
+        {
+            try
+            {
+                var extension = Path.GetExtension(filePath).ToLower();
+                
+                return extension switch
+                {
+                    // 텍스트 파일
+                    ".txt" or ".md" or ".log" => Brushes.Black,
+                    
+                    // 데이터 파일
+                    ".csv" or ".json" or ".xml" or ".yaml" or ".yml" => Brushes.DarkBlue,
+                    
+                    // 웹 파일
+                    ".html" or ".htm" => Brushes.Orange,
+                    ".css" => Brushes.Blue,
+                    ".js" => Brushes.Gold,
+                    ".ts" => Brushes.DarkBlue,
+                    
+                    // 프로그래밍 파일
+                    ".cs" => Brushes.Purple,
+                    ".py" => Brushes.Green,
+                    ".java" => Brushes.DarkOrange,
+                    ".cpp" or ".c" or ".h" => Brushes.DarkSlateBlue,
+                    ".sql" => Brushes.Blue,
+                    ".xaml" => Brushes.Purple,
+                    
+                    // 설정 파일
+                    ".config" or ".ini" => Brushes.Gray,
+                    
+                    // 오피스 문서
+                    ".doc" or ".docx" => Brushes.DarkBlue,
+                    ".xls" or ".xlsx" => Brushes.Green,
+                    ".ppt" or ".pptx" => Brushes.Orange,
+                    ".pdf" => Brushes.DarkRed,
+                    
+                    // 이미지 파일
+                    ".jpg" or ".jpeg" or ".png" or ".gif" or ".bmp" or ".ico" or ".svg" => Brushes.Purple,
+                    
+                    // 압축 파일
+                    ".zip" or ".rar" or ".7z" or ".tar" or ".gz" => Brushes.Brown,
+                    
+                    // 실행 파일
+                    ".exe" or ".msi" => Brushes.Red,
+                    ".bat" or ".cmd" or ".ps1" => Brushes.DarkGreen,
+                    
+                    // 기본
+                    _ => Brushes.Black
+                };
+            }
+            catch
+            {
+                return Brushes.Black;
+            }
         }
 
         private System.Windows.Controls.StackPanel CreateErrorHeader(string icon, string text)
@@ -224,7 +444,8 @@ namespace MGK_Analyzer.Services
             { 
                 Text = icon, 
                 FontSize = 12, 
-                Margin = new System.Windows.Thickness(0, 0, 5, 0) 
+                Margin = new System.Windows.Thickness(0, 0, 5, 0),
+                Foreground = Brushes.Red
             });
             
             panel.Children.Add(new System.Windows.Controls.TextBlock 
@@ -289,111 +510,6 @@ namespace MGK_Analyzer.Services
             };
 
             return displayableExtensions.Contains(extension);
-        }
-
-        private string GetFolderIcon(string path)
-        {
-            try
-            {
-                // 특별한 폴더들에 대한 아이콘
-                var folderName = Path.GetFileName(path).ToLower();
-                
-                return folderName switch
-                {
-                    "desktop" => "???",
-                    "documents" => "??",
-                    "downloads" => "??",
-                    "pictures" => "???",
-                    "music" => "??",
-                    "videos" => "??",
-                    "onedrive" => "??",
-                    "dropbox" => "??",
-                    "bin" or "debug" or "release" => "??",
-                    "obj" => "??",
-                    ".git" => "??",
-                    ".vs" or ".vscode" => "??",
-                    "node_modules" => "??",
-                    _ => "??"
-                };
-            }
-            catch
-            {
-                return "??";
-            }
-        }
-
-        private string GetFileIcon(string filePath)
-        {
-            try
-            {
-                var extension = Path.GetExtension(filePath).ToLower();
-                
-                return extension switch
-                {
-                    // 텍스트 파일
-                    ".txt" => "??",
-                    ".md" => "??",
-                    ".log" => "??",
-                    
-                    // 데이터 파일
-                    ".csv" => "??",
-                    ".json" => "???",
-                    ".xml" => "???",
-                    ".yaml" or ".yml" => "??",
-                    
-                    // 웹 파일
-                    ".html" or ".htm" => "??",
-                    ".css" => "??",
-                    ".js" => "?",
-                    ".ts" => "??",
-                    
-                    // 프로그래밍 파일
-                    ".cs" => "??",
-                    ".py" => "??",
-                    ".java" => "?",
-                    ".cpp" or ".c" => "??",
-                    ".h" => "??",
-                    ".sql" => "???",
-                    ".xaml" => "???",
-                    
-                    // 설정 파일
-                    ".config" => "??",
-                    ".ini" => "??",
-                    
-                    // 오피스 문서
-                    ".doc" or ".docx" => "??",
-                    ".xls" or ".xlsx" => "??",
-                    ".ppt" or ".pptx" => "???",
-                    ".pdf" => "??",
-                    
-                    // 이미지 파일
-                    ".jpg" or ".jpeg" => "???",
-                    ".png" => "???",
-                    ".gif" => "???",
-                    ".bmp" => "???",
-                    ".ico" => "??",
-                    ".svg" => "??",
-                    
-                    // 압축 파일
-                    ".zip" => "???",
-                    ".rar" => "??",
-                    ".7z" => "??",
-                    ".tar" or ".gz" => "??",
-                    
-                    // 실행 파일
-                    ".exe" => "??",
-                    ".msi" => "??",
-                    ".bat" or ".cmd" => "?",
-                    ".ps1" => "??",
-                    
-                    // 기본
-                    _ => "??"
-                };
-            }
-            catch
-            {
-                return "??";
-            }
         }
 
         public void RefreshTreeView(TreeView treeView, string currentPath = null)
