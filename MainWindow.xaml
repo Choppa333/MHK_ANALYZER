@@ -1,0 +1,173 @@
+﻿<Window x:Class="MGK_Analyzer.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:local="clr-namespace:MGK_Analyzer"
+        xmlns:syncfusion="http://schemas.syncfusion.com/wpf"
+        mc:Ignorable="d"
+        Title="MGK Analyzer" Height="600" Width="1000"
+        WindowStartupLocation="CenterScreen">
+    
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <!-- 메뉴바 -->
+            <RowDefinition Height="Auto"/>
+            <!-- 툴바 -->
+            <RowDefinition Height="*"/>
+            <!-- 메인 작업 영역 -->
+            <RowDefinition Height="Auto"/>
+            <!-- 상태바 -->
+        </Grid.RowDefinitions>
+
+        <!-- 메뉴바 -->
+        <Menu Grid.Row="0" Background="White" BorderBrush="LightGray" BorderThickness="0,0,0,1">
+            <MenuItem Header="파일(_F)" x:Name="FileMenu">
+                <MenuItem Header="새로 만들기(_N)" Click="NewFile_Click">
+                    <MenuItem.Icon>
+                        <TextBlock Text="📄" FontSize="14"/>
+                    </MenuItem.Icon>
+                </MenuItem>
+                <MenuItem Header="열기(_O)" Click="OpenFile_Click">
+                    <MenuItem.Icon>
+                        <TextBlock Text="📁" FontSize="14"/>
+                    </MenuItem.Icon>
+                </MenuItem>
+                <MenuItem Header="저장(_S)" Click="SaveFile_Click">
+                    <MenuItem.Icon>
+                        <TextBlock Text="💾" FontSize="14"/>
+                    </MenuItem.Icon>
+                </MenuItem>
+                <Separator/>
+                <MenuItem Header="최근 파일(_R)"/>
+                <Separator/>
+                <MenuItem Header="끝내기(_X)" Click="Exit_Click"/>
+            </MenuItem>
+
+            <MenuItem Header="데이터(_D)" x:Name="DataMenu">
+                <MenuItem Header="데이터 가져오기(_I)" Click="ImportData_Click">
+                    <MenuItem.Icon>
+                        <TextBlock Text="📥" FontSize="14"/>
+                    </MenuItem.Icon>
+                </MenuItem>
+                <MenuItem Header="데이터 내보내기(_E)" Click="ExportData_Click">
+                    <MenuItem.Icon>
+                        <TextBlock Text="📤" FontSize="14"/>
+                    </MenuItem.Icon>
+                </MenuItem>
+                <Separator/>
+                <MenuItem Header="데이터 분석(_A)" Click="AnalyzeData_Click"/>
+                <MenuItem Header="데이터 필터링(_F)" Click="FilterData_Click"/>
+            </MenuItem>
+
+            <MenuItem Header="프로젝트(_P)" x:Name="ProjectMenu">
+                <MenuItem Header="새 프로젝트(_N)" Click="NewProject_Click">
+                    <MenuItem.Icon>
+                        <TextBlock Text="🗂️" FontSize="14"/>
+                    </MenuItem.Icon>
+                </MenuItem>
+                <MenuItem Header="프로젝트 열기(_O)" Click="OpenProject_Click"/>
+                <MenuItem Header="프로젝트 저장(_S)" Click="SaveProject_Click"/>
+                <Separator/>
+                <MenuItem Header="프로젝트 설정(_C)" Click="ProjectSettings_Click"/>
+            </MenuItem>
+
+            <MenuItem Header="도구(_T)" x:Name="ToolsMenu">
+                <MenuItem Header="옵션(_O)" Click="Options_Click"/>
+                <MenuItem Header="설정(_S)" Click="Settings_Click"/>
+            </MenuItem>
+
+            <MenuItem Header="도움말(_H)" x:Name="HelpMenu">
+                <MenuItem Header="정보(_A)" Click="About_Click"/>
+            </MenuItem>
+        </Menu>
+
+        <!-- 툴바 -->
+        <ToolBar Grid.Row="1" Background="White" BorderBrush="LightGray" BorderThickness="0,0,0,1">
+            <Button x:Name="NewButton" Click="NewFile_Click" ToolTip="새로 만들기">
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="📄" FontSize="16" Margin="2"/>
+                    <TextBlock Text="새로만들기" Margin="2,0"/>
+                </StackPanel>
+            </Button>
+            
+            <Button x:Name="OpenButton" Click="OpenFile_Click" ToolTip="열기">
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="📁" FontSize="16" Margin="2"/>
+                    <TextBlock Text="열기" Margin="2,0"/>
+                </StackPanel>
+            </Button>
+            
+            <Button x:Name="SaveButton" Click="SaveFile_Click" ToolTip="저장">
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="💾" FontSize="16" Margin="2"/>
+                    <TextBlock Text="저장" Margin="2,0"/>
+                </StackPanel>
+            </Button>
+            
+            <Separator/>
+            
+            <Button x:Name="ImportButton" Click="ImportData_Click" ToolTip="데이터 가져오기">
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="📥" FontSize="16" Margin="2"/>
+                    <TextBlock Text="가져오기" Margin="2,0"/>
+                </StackPanel>
+            </Button>
+            
+            <Button x:Name="ExportButton" Click="ExportData_Click" ToolTip="데이터 내보내기">
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="📤" FontSize="16" Margin="2"/>
+                    <TextBlock Text="내보내기" Margin="2,0"/>
+                </StackPanel>
+            </Button>
+            
+            <Separator/>
+            
+            <Button x:Name="AnalyzeButton" Click="AnalyzeData_Click" ToolTip="데이터 분석">
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="📊" FontSize="16" Margin="2"/>
+                    <TextBlock Text="분석" Margin="2,0"/>
+                </StackPanel>
+            </Button>
+            
+            <Button x:Name="ProjectButton" Click="NewProject_Click" ToolTip="새 프로젝트">
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="🗂️" FontSize="16" Margin="2"/>
+                    <TextBlock Text="프로젝트" Margin="2,0"/>
+                </StackPanel>
+            </Button>
+            
+            <Separator/>
+            
+            <Button x:Name="ThemeButton" Click="Settings_Click" ToolTip="테마 설정">
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="🎨" FontSize="16" Margin="2"/>
+                    <TextBlock Text="테마" Margin="2,0"/>
+                </StackPanel>
+            </Button>
+        </ToolBar>
+
+        <!-- 메인 작업 영역 -->
+        <Grid Grid.Row="2" Background="WhiteSmoke">
+            <TextBlock Text="MGK Analyzer - 메인 작업 영역" 
+                       FontSize="24" 
+                       FontWeight="Light"
+                       HorizontalAlignment="Center" 
+                       VerticalAlignment="Center"
+                       Foreground="Gray"/>
+        </Grid>
+
+        <!-- 상태바 -->
+        <StatusBar Grid.Row="3" Background="White" BorderBrush="LightGray" BorderThickness="0,1,0,0">
+            <StatusBarItem>
+                <TextBlock x:Name="StatusText" Text="준비"/>
+            </StatusBarItem>
+            <Separator/>
+            <StatusBarItem HorizontalAlignment="Right">
+                <TextBlock x:Name="DateTimeText" Text="{Binding Source={x:Static sys:DateTime.Now}, StringFormat='{}{0:yyyy-MM-dd HH:mm:ss}'}"
+                           xmlns:sys="clr-namespace:System;assembly=mscorlib"/>
+            </StatusBarItem>
+        </StatusBar>
+    </Grid>
+</Window>
