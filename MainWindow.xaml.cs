@@ -178,8 +178,7 @@ namespace MGK_Analyzer
             }
             
             // GridSplitter 활성화
-            FileExplorerSplitter.Visibility = Visibility.Visible;
-            FileExplorerSplitter.IsEnabled = true;
+            EnableGridSplitter();
             
             UpdateStatusBar("파일 탐색기가 고정되었습니다.");
         }
@@ -191,10 +190,39 @@ namespace MGK_Analyzer
             _settings.Save();
             
             // GridSplitter 비활성화
-            FileExplorerSplitter.Visibility = Visibility.Collapsed;
-            FileExplorerSplitter.IsEnabled = false;
+            DisableGridSplitter();
             
             UpdateStatusBar("파일 탐색기 고정이 해제되었습니다.");
+        }
+
+        private void EnableGridSplitter()
+        {
+            // 파일 탐색기 컬럼을 고정 너비로 설정
+            var currentWidth = Math.Max(200, FileExplorerPanel.ActualWidth + 25); // 탭 너비 포함
+            
+            var parentGrid = (Grid)FileExplorerContainer.Parent;
+            if (parentGrid != null)
+            {
+                parentGrid.ColumnDefinitions[0].Width = new GridLength(currentWidth);
+                
+                // GridSplitter 활성화
+                FileExplorerSplitter.Visibility = Visibility.Visible;
+                FileExplorerSplitter.IsEnabled = true;
+            }
+        }
+
+        private void DisableGridSplitter()
+        {
+            // 컬럼을 Auto로 되돌리기
+            var parentGrid = (Grid)FileExplorerContainer.Parent;
+            if (parentGrid != null)
+            {
+                parentGrid.ColumnDefinitions[0].Width = GridLength.Auto;
+                
+                // GridSplitter 비활성화
+                FileExplorerSplitter.Visibility = Visibility.Collapsed;
+                FileExplorerSplitter.IsEnabled = false;
+            }
         }
 
         private void ExpandFileExplorer(bool animated)
@@ -214,34 +242,51 @@ namespace MGK_Analyzer
             {
                 UpdateAnimationTargetWidth(targetWidth);
                 var storyboard = FindResource("SlideInStoryboard") as Storyboard;
-                storyboard?.Begin();
+                if (storyboard != null)
+                {
+                    storyboard.Completed += (s, e) =>
+                    {
+                        // 애니메이션 완료 후 GridSplitter 활성화
+                        if (_isFileExplorerPinned)
+                        {
+                            EnableGridSplitter();
+                        }
+                    };
+                    storyboard.Begin();
+                }
             }
             else
             {
                 FileExplorerPanel.Width = targetWidth;
+                if (_isFileExplorerPinned)
+                {
+                    EnableGridSplitter();
+                }
             }
             
             // 탭 숨기기
             FileExplorerTab.Visibility = Visibility.Collapsed;
-            
-            // GridSplitter 표시 (고정된 경우에만)
-            if (_isFileExplorerPinned)
-            {
-                FileExplorerSplitter.Visibility = Visibility.Visible;
-                FileExplorerSplitter.IsEnabled = true;
-            }
         }
 
         private void CollapseFileExplorer(bool animated)
         {
             _isFileExplorerExpanded = false;
             
-            // 현재 너비 저장
-            if (FileExplorerPanel.ActualWidth > 0)
+            // 현재 너비 저장 (GridSplitter에 의해 변경된 경우)
+            var parentGrid = (Grid)FileExplorerContainer.Parent;
+            if (parentGrid != null && parentGrid.ColumnDefinitions[0].Width.IsAbsolute)
+            {
+                _settings.FileExplorerWidth = parentGrid.ColumnDefinitions[0].Width.Value - 25; // 탭 너비 제외
+                _settings.Save();
+            }
+            else if (FileExplorerPanel.ActualWidth > 0)
             {
                 _settings.FileExplorerWidth = FileExplorerPanel.ActualWidth;
                 _settings.Save();
             }
+            
+            // GridSplitter 비활성화
+            DisableGridSplitter();
             
             if (animated)
             {
@@ -256,8 +301,6 @@ namespace MGK_Analyzer
                     storyboard.Completed += (s, e) => 
                     {
                         FileExplorerTab.Visibility = Visibility.Visible;
-                        FileExplorerSplitter.Visibility = Visibility.Collapsed;
-                        FileExplorerSplitter.IsEnabled = false;
                     };
                     storyboard.Begin();
                 }
@@ -266,8 +309,6 @@ namespace MGK_Analyzer
             {
                 FileExplorerPanel.Width = 0;
                 FileExplorerTab.Visibility = Visibility.Visible;
-                FileExplorerSplitter.Visibility = Visibility.Collapsed;
-                FileExplorerSplitter.IsEnabled = false;
             }
         }
 

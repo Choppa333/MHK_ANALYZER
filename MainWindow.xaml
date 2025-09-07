@@ -189,97 +189,111 @@
         <!-- 메인 작업 영역 with 파일 탐색기 -->
         <Grid Grid.Row="2">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="Auto" MinWidth="25" x:Name="FileExplorerColumn"/>
                 <!-- 파일 탐색기 영역 -->
-                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="Auto" x:Name="SplitterColumn"/>
                 <!-- GridSplitter -->
-                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="*" x:Name="ContentColumn"/>
                 <!-- 메인 컨텐츠 영역 -->
             </Grid.ColumnDefinitions>
 
-            <!-- 숨겨진 상태의 탭 버튼 -->
-            <Border Grid.Column="0" x:Name="FileExplorerTab"
-                    Width="25" Background="#FF2D2D30" 
-                    BorderBrush="#FF3E3E42" BorderThickness="0,0,1,0"
-                    Cursor="Hand"
-                    MouseEnter="FileExplorerTab_MouseEnter"
-                    MouseDown="FileExplorerTab_MouseDown">
-                <StackPanel Orientation="Vertical" VerticalAlignment="Center">
-                    <TextBlock Text="DIR" FontSize="10" Foreground="White" FontWeight="Bold"
-                               HorizontalAlignment="Center" Margin="1"/>
-                    <TextBlock Text="F" FontSize="8" Foreground="#FFAAAAAA" 
-                               HorizontalAlignment="Center" Margin="0,1"/>
-                    <TextBlock Text="i" FontSize="8" Foreground="#FFAAAAAA" 
-                               HorizontalAlignment="Center" Margin="0,1"/>
-                    <TextBlock Text="l" FontSize="8" Foreground="#FFAAAAAA" 
-                               HorizontalAlignment="Center" Margin="0,1"/>
-                    <TextBlock Text="e" FontSize="8" Foreground="#FFAAAAAA" 
-                               HorizontalAlignment="Center" Margin="0,1"/>
-                    <TextBlock Text="s" FontSize="8" Foreground="#FFAAAAAA" 
-                               HorizontalAlignment="Center" Margin="0,1"/>
-                </StackPanel>
-            </Border>
-
-            <!-- 파일 탐색기 패널 -->
-            <Border Grid.Column="0" x:Name="FileExplorerPanel"
-                    Width="0" Background="#FFF5F5F5"
-                    BorderBrush="#FFCCCCCC" BorderThickness="0,0,1,0"
-                    ClipToBounds="True"
-                    MouseLeave="FileExplorerPanel_MouseLeave">
+            <!-- 파일 탐색기 전체 영역 -->
+            <Border Grid.Column="0" x:Name="FileExplorerContainer" ClipToBounds="True">
                 <Grid>
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto"/>
-                        <!-- 헤더 -->
-                        <RowDefinition Height="*"/>
-                        <!-- 파일 트리 -->
-                    </Grid.RowDefinitions>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="25"/>
+                        <!-- 탭 영역 -->
+                        <ColumnDefinition Width="*"/>
+                        <!-- 패널 영역 -->
+                    </Grid.ColumnDefinitions>
 
-                    <!-- 파일 탐색기 헤더 -->
-                    <Border Grid.Row="0" Background="#FFE1E1E1" 
-                            BorderBrush="#FFCCCCCC" BorderThickness="0,0,0,1"
-                            Height="30">
-                        <Grid>
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="Auto"/>
-                            </Grid.ColumnDefinitions>
-                            
-                            <TextBlock Grid.Column="0" Text="파일 탐색기" 
-                                       FontSize="12" FontWeight="SemiBold"
-                                       VerticalAlignment="Center" Margin="8,0"/>
-                            
-                            <!-- 고정/해제 버튼 -->
-                            <ToggleButton Grid.Column="1" x:Name="PinButton"
-                                          Width="20" Height="20" Margin="5"
-                                          Content="📌" FontSize="10"
-                                          Checked="PinButton_Checked"
-                                          Unchecked="PinButton_Unchecked"
-                                          ToolTip="고정/해제"/>
-                        </Grid>
+                    <!-- 숨겨진 상태의 탭 버튼 -->
+                    <Border Grid.Column="0" x:Name="FileExplorerTab"
+                            Background="#FF2D2D30" 
+                            BorderBrush="#FF3E3E42" BorderThickness="0,0,1,0"
+                            Cursor="Hand"
+                            MouseEnter="FileExplorerTab_MouseEnter"
+                            MouseDown="FileExplorerTab_MouseDown">
+                        <StackPanel Orientation="Vertical" VerticalAlignment="Center">
+                            <TextBlock Text="DIR" FontSize="10" Foreground="White" FontWeight="Bold"
+                                       HorizontalAlignment="Center" Margin="1"/>
+                            <TextBlock Text="F" FontSize="8" Foreground="#FFAAAAAA" 
+                                       HorizontalAlignment="Center" Margin="0,1"/>
+                            <TextBlock Text="i" FontSize="8" Foreground="#FFAAAAAA" 
+                                       HorizontalAlignment="Center" Margin="0,1"/>
+                            <TextBlock Text="l" FontSize="8" Foreground="#FFAAAAAA" 
+                                       HorizontalAlignment="Center" Margin="0,1"/>
+                            <TextBlock Text="e" FontSize="8" Foreground="#FFAAAAAA" 
+                                       HorizontalAlignment="Center" Margin="0,1"/>
+                            <TextBlock Text="s" FontSize="8" Foreground="#FFAAAAAA" 
+                                       HorizontalAlignment="Center" Margin="0,1"/>
+                        </StackPanel>
                     </Border>
 
-                    <!-- 파일 트리뷰 -->
-                    <TreeView Grid.Row="1" x:Name="FileTreeView"
-                              Background="Transparent" BorderThickness="0"
-                              Margin="5" ScrollViewer.HorizontalScrollBarVisibility="Auto">
-                        <TreeView.ItemContainerStyle>
-                            <Style TargetType="TreeViewItem">
-                                <Setter Property="IsExpanded" Value="False"/>
-                                <Setter Property="FontSize" Value="11"/>
-                                <Setter Property="Padding" Value="2"/>
-                            </Style>
-                        </TreeView.ItemContainerStyle>
-                    </TreeView>
+                    <!-- 파일 탐색기 패널 -->
+                    <Border Grid.Column="1" x:Name="FileExplorerPanel"
+                            Width="0" Background="#FFF5F5F5"
+                            BorderBrush="#FFCCCCCC" BorderThickness="0,0,1,0"
+                            MouseLeave="FileExplorerPanel_MouseLeave">
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <!-- 헤더 -->
+                                <RowDefinition Height="*"/>
+                                <!-- 파일 트리 -->
+                            </Grid.RowDefinitions>
+
+                            <!-- 파일 탐색기 헤더 -->
+                            <Border Grid.Row="0" Background="#FFE1E1E1" 
+                                    BorderBrush="#FFCCCCCC" BorderThickness="0,0,0,1"
+                                    Height="30">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    
+                                    <TextBlock Grid.Column="0" Text="파일 탐색기" 
+                                               FontSize="12" FontWeight="SemiBold"
+                                               VerticalAlignment="Center" Margin="8,0"/>
+                                    
+                                    <!-- 고정/해제 버튼 -->
+                                    <ToggleButton Grid.Column="1" x:Name="PinButton"
+                                                  Width="20" Height="20" Margin="5"
+                                                  Content="PIN" FontSize="8" FontWeight="Bold"
+                                                  Checked="PinButton_Checked"
+                                                  Unchecked="PinButton_Unchecked"
+                                                  ToolTip="고정/해제"/>
+                                </Grid>
+                            </Border>
+
+                            <!-- 파일 트리뷰 -->
+                            <TreeView Grid.Row="1" x:Name="FileTreeView"
+                                      Background="Transparent" BorderThickness="0"
+                                      Margin="5" ScrollViewer.HorizontalScrollBarVisibility="Auto">
+                                <TreeView.ItemContainerStyle>
+                                    <Style TargetType="TreeViewItem">
+                                        <Setter Property="IsExpanded" Value="False"/>
+                                        <Setter Property="FontSize" Value="11"/>
+                                        <Setter Property="Padding" Value="2"/>
+                                    </Style>
+                                </TreeView.ItemContainerStyle>
+                            </TreeView>
+                        </Grid>
+                    </Border>
                 </Grid>
             </Border>
 
             <!-- GridSplitter for 리사이징 -->
             <GridSplitter Grid.Column="1" x:Name="FileExplorerSplitter"
-                          Width="3" Background="#FFCCCCCC"
-                          HorizontalAlignment="Center"
+                          Width="5" Background="#FFCCCCCC"
+                          HorizontalAlignment="Stretch"
                           VerticalAlignment="Stretch"
                           Visibility="Collapsed"
-                          IsEnabled="False"/>
+                          IsEnabled="False"
+                          ShowsPreview="False"
+                          ResizeBehavior="PreviousAndCurrent"
+                          ResizeDirection="Columns"/>
 
             <!-- 메인 컨텐츠 영역 -->
             <Grid Grid.Column="2" Background="WhiteSmoke">
