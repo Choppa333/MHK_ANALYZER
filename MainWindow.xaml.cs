@@ -54,16 +54,50 @@ namespace MGK_Analyzer
 
         private void InitializeFileExplorer()
         {
-            // 파일 트리뷰 초기화
-            FileExplorerService.Instance.PopulateTreeView(FileTreeView);
-            
-            // 저장된 설정 복원
-            FileExplorerPanel.Width = _settings.FileExplorerWidth;
-            PinButton.IsChecked = _isFileExplorerPinned;
-            
-            if (_isFileExplorerPinned)
+            try
             {
-                ExpandFileExplorer(false); // 애니메이션 없이 확장
+                // 파일 트리뷰 초기화
+                FileExplorerService.Instance.PopulateTreeView(FileTreeView);
+                
+                // 저장된 설정 복원
+                if (_settings.FileExplorerWidth > 0)
+                {
+                    // 애니메이션 타겟 너비 업데이트
+                    UpdateAnimationTargetWidth(_settings.FileExplorerWidth);
+                }
+                
+                PinButton.IsChecked = _isFileExplorerPinned;
+                
+                if (_isFileExplorerPinned)
+                {
+                    ExpandFileExplorer(false); // 애니메이션 없이 확장
+                }
+                else
+                {
+                    // 초기 상태는 숨김
+                    FileExplorerPanel.Width = 0;
+                    FileExplorerTab.Visibility = Visibility.Visible;
+                }
+            }
+            catch (Exception ex)
+            {
+                UpdateStatusBar($"파일 탐색기 초기화 오류: {ex.Message}");
+            }
+        }
+
+        private void UpdateAnimationTargetWidth(double width)
+        {
+            var slideInStoryboard = FindResource("SlideInStoryboard") as Storyboard;
+            var slideOutStoryboard = FindResource("SlideOutStoryboard") as Storyboard;
+            
+            if (slideInStoryboard?.Children[0] is DoubleAnimation slideInAnimation)
+            {
+                slideInAnimation.To = width;
+            }
+            
+            if (slideOutStoryboard?.Children[0] is DoubleAnimation slideOutAnimation)
+            {
+                slideOutAnimation.From = width;
             }
         }
 
@@ -95,6 +129,7 @@ namespace MGK_Analyzer
             if (!_isFileExplorerExpanded && !_isFileExplorerPinned)
             {
                 ExpandFileExplorer(true);
+                UpdateStatusBar("파일 탐색기를 열었습니다.");
             }
         }
 
@@ -103,14 +138,31 @@ namespace MGK_Analyzer
             if (!_isFileExplorerExpanded)
             {
                 ExpandFileExplorer(true);
+                UpdateStatusBar("파일 탐색기를 열었습니다.");
             }
         }
 
         private void FileExplorerPanel_MouseLeave(object sender, MouseEventArgs e)
         {
-            if (_isFileExplorerExpanded && !_isFileExplorerPinned)
+            // 마우스가 완전히 패널을 벗어났는지 확인
+            var position = e.GetPosition(FileExplorerPanel);
+            var bounds = new Rect(0, 0, FileExplorerPanel.ActualWidth, FileExplorerPanel.ActualHeight);
+            
+            if (_isFileExplorerExpanded && !_isFileExplorerPinned && !bounds.Contains(position))
             {
-                CollapseFileExplorer(true);
+                // 약간의 지연을 두어 실수로 닫히는 것을 방지
+                var timer = new System.Windows.Threading.DispatcherTimer();
+                timer.Interval = TimeSpan.FromMilliseconds(300);
+                timer.Tick += (s, args) =>
+                {
+                    timer.Stop();
+                    if (!_isFileExplorerPinned && !FileExplorerPanel.IsMouseOver)
+                    {
+                        CollapseFileExplorer(true);
+                        UpdateStatusBar("파일 탐색기를 닫았습니다.");
+                    }
+                };
+                timer.Start();
             }
         }
 
@@ -149,21 +201,20 @@ namespace MGK_Analyzer
         {
             _isFileExplorerExpanded = true;
             
-            // 화면 너비의 20%로 설정 (최소 150, 최대 300)
-            var targetWidth = Math.Max(150, Math.Min(300, this.ActualWidth * 0.2));
+            // 화면 너비의 20%로 설정 (최소 200, 최대 400)
+            var targetWidth = Math.Max(200, Math.Min(400, this.ActualWidth * 0.2));
+            
+            // 저장된 너비가 있으면 사용
+            if (_settings.FileExplorerWidth > 0)
+            {
+                targetWidth = _settings.FileExplorerWidth;
+            }
             
             if (animated)
             {
+                UpdateAnimationTargetWidth(targetWidth);
                 var storyboard = FindResource("SlideInStoryboard") as Storyboard;
-                if (storyboard != null)
-                {
-                    var animation = storyboard.Children[0] as DoubleAnimation;
-                    if (animation != null)
-                    {
-                        animation.To = targetWidth;
-                    }
-                    storyboard.Begin();
-                }
+                storyboard?.Begin();
             }
             else
             {
@@ -172,6 +223,13 @@ namespace MGK_Analyzer
             
             // 탭 숨기기
             FileExplorerTab.Visibility = Visibility.Collapsed;
+            
+            // GridSplitter 표시 (고정된 경우에만)
+            if (_isFileExplorerPinned)
+            {
+                FileExplorerSplitter.Visibility = Visibility.Visible;
+                FileExplorerSplitter.IsEnabled = true;
+            }
         }
 
         private void CollapseFileExplorer(bool animated)
@@ -179,8 +237,11 @@ namespace MGK_Analyzer
             _isFileExplorerExpanded = false;
             
             // 현재 너비 저장
-            _settings.FileExplorerWidth = FileExplorerPanel.Width;
-            _settings.Save();
+            if (FileExplorerPanel.ActualWidth > 0)
+            {
+                _settings.FileExplorerWidth = FileExplorerPanel.ActualWidth;
+                _settings.Save();
+            }
             
             if (animated)
             {
@@ -190,11 +251,13 @@ namespace MGK_Analyzer
                     var animation = storyboard.Children[0] as DoubleAnimation;
                     if (animation != null)
                     {
-                        animation.From = FileExplorerPanel.Width;
+                        animation.From = FileExplorerPanel.ActualWidth;
                     }
                     storyboard.Completed += (s, e) => 
                     {
                         FileExplorerTab.Visibility = Visibility.Visible;
+                        FileExplorerSplitter.Visibility = Visibility.Collapsed;
+                        FileExplorerSplitter.IsEnabled = false;
                     };
                     storyboard.Begin();
                 }
@@ -203,6 +266,8 @@ namespace MGK_Analyzer
             {
                 FileExplorerPanel.Width = 0;
                 FileExplorerTab.Visibility = Visibility.Visible;
+                FileExplorerSplitter.Visibility = Visibility.Collapsed;
+                FileExplorerSplitter.IsEnabled = false;
             }
         }
 
