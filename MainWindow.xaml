@@ -48,17 +48,17 @@
             <MenuItem Header="파일(_F)" x:Name="FileMenu">
                 <MenuItem Header="새로 만들기(_N)" Click="NewFile_Click">
                     <MenuItem.Icon>
-                        <TextBlock Text="NEW" FontSize="8" FontWeight="Bold" Foreground="Blue"/>
+                        <Path Data="{StaticResource NewFileIcon}" Style="{StaticResource MenuIconStyle}" Fill="DodgerBlue"/>
                     </MenuItem.Icon>
                 </MenuItem>
                 <MenuItem Header="열기(_O)" Click="OpenFile_Click">
                     <MenuItem.Icon>
-                        <TextBlock Text="OPEN" FontSize="8" FontWeight="Bold" Foreground="Green"/>
+                        <Path Data="{StaticResource OpenFileIcon}" Style="{StaticResource MenuIconStyle}" Fill="ForestGreen"/>
                     </MenuItem.Icon>
                 </MenuItem>
                 <MenuItem Header="저장(_S)" Click="SaveFile_Click">
                     <MenuItem.Icon>
-                        <TextBlock Text="SAVE" FontSize="8" FontWeight="Bold" Foreground="Orange"/>
+                        <Path Data="{StaticResource SaveIcon}" Style="{StaticResource MenuIconStyle}" Fill="Orange"/>
                     </MenuItem.Icon>
                 </MenuItem>
                 <Separator/>
@@ -70,26 +70,34 @@
             <MenuItem Header="데이터(_D)" x:Name="DataMenu">
                 <MenuItem Header="데이터 가져오기(_I)" Click="ImportData_Click">
                     <MenuItem.Icon>
-                        <TextBlock Text="IN" FontSize="8" FontWeight="Bold" Foreground="Blue"/>
+                        <Path Data="{StaticResource ImportIcon}" Style="{StaticResource MenuIconStyle}" Fill="SteelBlue"/>
                     </MenuItem.Icon>
                 </MenuItem>
                 <MenuItem Header="데이터 내보내기(_E)" Click="ExportData_Click">
                     <MenuItem.Icon>
-                        <TextBlock Text="OUT" FontSize="8" FontWeight="Bold" Foreground="Red"/>
+                        <Path Data="{StaticResource ExportIcon}" Style="{StaticResource MenuIconStyle}" Fill="Crimson"/>
                     </MenuItem.Icon>
                 </MenuItem>
                 <Separator/>
-                <MenuItem Header="데이터 분석(_A)" Click="AnalyzeData_Click"/>
+                <MenuItem Header="데이터 분석(_A)" Click="AnalyzeData_Click">
+                    <MenuItem.Icon>
+                        <Path Data="{StaticResource ChartIcon}" Style="{StaticResource MenuIconStyle}" Fill="Purple"/>
+                    </MenuItem.Icon>
+                </MenuItem>
                 <MenuItem Header="데이터 필터링(_F)" Click="FilterData_Click"/>
             </MenuItem>
 
             <MenuItem Header="프로젝트(_P)" x:Name="ProjectMenu">
                 <MenuItem Header="새 프로젝트(_N)" Click="NewProject_Click">
                     <MenuItem.Icon>
-                        <TextBlock Text="PROJ" FontSize="8" FontWeight="Bold" Foreground="Purple"/>
+                        <Path Data="{StaticResource ProjectIcon}" Style="{StaticResource MenuIconStyle}" Fill="DarkViolet"/>
                     </MenuItem.Icon>
                 </MenuItem>
-                <MenuItem Header="프로젝트 열기(_O)" Click="OpenProject_Click"/>
+                <MenuItem Header="프로젝트 열기(_O)" Click="OpenProject_Click">
+                    <MenuItem.Icon>
+                        <Path Data="{StaticResource FolderIcon}" Style="{StaticResource MenuIconStyle}" Fill="Goldenrod"/>
+                    </MenuItem.Icon>
+                </MenuItem>
                 <MenuItem Header="프로젝트 저장(_S)" Click="SaveProject_Click"/>
                 <Separator/>
                 <MenuItem Header="프로젝트 설정(_C)" Click="ProjectSettings_Click"/>
@@ -97,7 +105,11 @@
 
             <MenuItem Header="도구(_T)" x:Name="ToolsMenu">
                 <MenuItem Header="옵션(_O)" Click="Options_Click"/>
-                <MenuItem Header="설정(_S)" Click="Settings_Click"/>
+                <MenuItem Header="설정(_S)" Click="Settings_Click">
+                    <MenuItem.Icon>
+                        <Path Data="{StaticResource PaletteIcon}" Style="{StaticResource MenuIconStyle}" Fill="HotPink"/>
+                    </MenuItem.Icon>
+                </MenuItem>
             </MenuItem>
 
             <MenuItem Header="도움말(_H)" x:Name="HelpMenu">
@@ -109,27 +121,21 @@
         <ToolBar Grid.Row="1" Background="White" BorderBrush="LightGray" BorderThickness="0,0,0,1">
             <Button x:Name="NewButton" Click="NewFile_Click" ToolTip="새로 만들기">
                 <StackPanel Orientation="Horizontal">
-                    <Border Background="LightBlue" CornerRadius="2" Padding="2" Margin="2">
-                        <TextBlock Text="NEW" FontSize="10" FontWeight="Bold" Foreground="DarkBlue"/>
-                    </Border>
+                    <Path Data="{StaticResource NewFileIcon}" Style="{StaticResource ToolbarIconStyle}" Fill="DodgerBlue"/>
                     <TextBlock Text="새로만들기" Margin="5,0" VerticalAlignment="Center"/>
                 </StackPanel>
             </Button>
             
             <Button x:Name="OpenButton" Click="OpenFile_Click" ToolTip="열기">
                 <StackPanel Orientation="Horizontal">
-                    <Border Background="LightGreen" CornerRadius="2" Padding="2" Margin="2">
-                        <TextBlock Text="OPEN" FontSize="10" FontWeight="Bold" Foreground="DarkGreen"/>
-                    </Border>
+                    <Path Data="{StaticResource OpenFileIcon}" Style="{StaticResource ToolbarIconStyle}" Fill="ForestGreen"/>
                     <TextBlock Text="열기" Margin="5,0" VerticalAlignment="Center"/>
                 </StackPanel>
             </Button>
             
             <Button x:Name="SaveButton" Click="SaveFile_Click" ToolTip="저장">
                 <StackPanel Orientation="Horizontal">
-                    <Border Background="LightGoldenrodYellow" CornerRadius="2" Padding="2" Margin="2">
-                        <TextBlock Text="SAVE" FontSize="10" FontWeight="Bold" Foreground="DarkOrange"/>
-                    </Border>
+                    <Path Data="{StaticResource SaveIcon}" Style="{StaticResource ToolbarIconStyle}" Fill="Orange"/>
                     <TextBlock Text="저장" Margin="5,0" VerticalAlignment="Center"/>
                 </StackPanel>
             </Button>
@@ -138,18 +144,14 @@
             
             <Button x:Name="ImportButton" Click="ImportData_Click" ToolTip="데이터 가져오기">
                 <StackPanel Orientation="Horizontal">
-                    <Border Background="LightBlue" CornerRadius="2" Padding="2" Margin="2">
-                        <TextBlock Text="IN" FontSize="10" FontWeight="Bold" Foreground="Blue"/>
-                    </Border>
+                    <Path Data="{StaticResource ImportIcon}" Style="{StaticResource ToolbarIconStyle}" Fill="SteelBlue"/>
                     <TextBlock Text="가져오기" Margin="5,0" VerticalAlignment="Center"/>
                 </StackPanel>
             </Button>
             
             <Button x:Name="ExportButton" Click="ExportData_Click" ToolTip="데이터 내보내기">
                 <StackPanel Orientation="Horizontal">
-                    <Border Background="LightCoral" CornerRadius="2" Padding="2" Margin="2">
-                        <TextBlock Text="OUT" FontSize="10" FontWeight="Bold" Foreground="DarkRed"/>
-                    </Border>
+                    <Path Data="{StaticResource ExportIcon}" Style="{StaticResource ToolbarIconStyle}" Fill="Crimson"/>
                     <TextBlock Text="내보내기" Margin="5,0" VerticalAlignment="Center"/>
                 </StackPanel>
             </Button>
@@ -158,18 +160,14 @@
             
             <Button x:Name="AnalyzeButton" Click="AnalyzeData_Click" ToolTip="데이터 분석">
                 <StackPanel Orientation="Horizontal">
-                    <Border Background="LightPink" CornerRadius="2" Padding="2" Margin="2">
-                        <TextBlock Text="CHART" FontSize="8" FontWeight="Bold" Foreground="Purple"/>
-                    </Border>
+                    <Path Data="{StaticResource ChartIcon}" Style="{StaticResource ToolbarIconStyle}" Fill="Purple"/>
                     <TextBlock Text="분석" Margin="5,0" VerticalAlignment="Center"/>
                 </StackPanel>
             </Button>
             
             <Button x:Name="ProjectButton" Click="NewProject_Click" ToolTip="새 프로젝트">
                 <StackPanel Orientation="Horizontal">
-                    <Border Background="Lavender" CornerRadius="2" Padding="2" Margin="2">
-                        <TextBlock Text="PROJ" FontSize="9" FontWeight="Bold" Foreground="Purple"/>
-                    </Border>
+                    <Path Data="{StaticResource ProjectIcon}" Style="{StaticResource ToolbarIconStyle}" Fill="DarkViolet"/>
                     <TextBlock Text="프로젝트" Margin="5,0" VerticalAlignment="Center"/>
                 </StackPanel>
             </Button>
@@ -178,9 +176,7 @@
             
             <Button x:Name="ThemeButton" Click="Settings_Click" ToolTip="테마 설정">
                 <StackPanel Orientation="Horizontal">
-                    <Border Background="LightSalmon" CornerRadius="2" Padding="2" Margin="2">
-                        <TextBlock Text="THEME" FontSize="8" FontWeight="Bold" Foreground="DarkRed"/>
-                    </Border>
+                    <Path Data="{StaticResource PaletteIcon}" Style="{StaticResource ToolbarIconStyle}" Fill="HotPink"/>
                     <TextBlock Text="테마" Margin="5,0" VerticalAlignment="Center"/>
                 </StackPanel>
             </Button>
@@ -259,11 +255,15 @@
                                     
                                     <!-- 고정/해제 버튼 -->
                                     <ToggleButton Grid.Column="1" x:Name="PinButton"
-                                                  Width="20" Height="20" Margin="5"
-                                                  Content="PIN" FontSize="8" FontWeight="Bold"
+                                                  Width="24" Height="20" Margin="5"
                                                   Checked="PinButton_Checked"
                                                   Unchecked="PinButton_Unchecked"
-                                                  ToolTip="고정/해제"/>
+                                                  ToolTip="고정/해제">
+                                        <Path Data="{StaticResource PinIcon}" 
+                                              Width="12" Height="12" 
+                                              Fill="{Binding RelativeSource={RelativeSource AncestorType=ToggleButton}, Path=Foreground}"
+                                              Stretch="Uniform"/>
+                                    </ToggleButton>
                                 </Grid>
                             </Border>
 
