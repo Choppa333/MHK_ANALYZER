@@ -8,6 +8,22 @@
             <ResourceDictionary.MergedDictionaries>
                 <ResourceDictionary Source="Resources/Icons.xaml"/>
             </ResourceDictionary.MergedDictionaries>
+            
+            <!-- 전체 애플리케이션 기본 폰트 설정 (한글 지원) -->
+            <Style TargetType="{x:Type Control}">
+                <Setter Property="FontFamily" Value="Malgun Gothic, Segoe UI, Arial"/>
+                <Setter Property="FontSize" Value="12"/>
+            </Style>
+            
+            <Style TargetType="{x:Type TextBlock}">
+                <Setter Property="FontFamily" Value="Malgun Gothic, Segoe UI, Arial"/>
+                <Setter Property="FontSize" Value="12"/>
+            </Style>
+            
+            <Style TargetType="{x:Type TextBox}">
+                <Setter Property="FontFamily" Value="Malgun Gothic, Segoe UI, Arial"/>
+                <Setter Property="FontSize" Value="12"/>
+            </Style>
         </ResourceDictionary>
     </Application.Resources>
 </Application>

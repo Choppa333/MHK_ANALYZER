@@ -110,6 +110,12 @@
                         <Path Data="{StaticResource PaletteIcon}" Style="{StaticResource MenuIconStyle}" Fill="HotPink"/>
                     </MenuItem.Icon>
                 </MenuItem>
+                <Separator/>
+                <MenuItem Header="성능 로그 뷰어(_L)" Click="ShowLogViewer_Click">
+                    <MenuItem.Icon>
+                        <Path Data="{StaticResource ChartIcon}" Style="{StaticResource MenuIconStyle}" Fill="Green"/>
+                    </MenuItem.Icon>
+                </MenuItem>
             </MenuItem>
 
             <MenuItem Header="도움말(_H)" x:Name="HelpMenu">
@@ -296,9 +302,28 @@
                           ResizeDirection="Columns"/>
 
             <!-- 메인 컨텐츠 영역 -->
-            <Grid Grid.Column="2" Background="WhiteSmoke">
-                <TextBlock Text="MGK Analyzer - 메인 작업 영역" 
-                           FontSize="24" 
+            <Grid Grid.Column="2" Background="LightGray">
+                <Canvas x:Name="MdiCanvas" ClipToBounds="True" Background="#FFF0F0F0">
+                    <!-- 차트 윈도우들이 동적으로 추가됨 -->
+                </Canvas>
+                
+                <!-- MDI 윈도우 관리 툴바 -->
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Top" 
+                           Margin="10" Background="White" Opacity="0.8">
+                    <Button Content="Cascade" Click="CascadeWindows_Click" Margin="2" 
+                            Padding="5,2" FontSize="10"/>
+                    <Button Content="Tile" Click="TileWindows_Click" Margin="2" 
+                            Padding="5,2" FontSize="10"/>
+                    <Button Content="Min All" Click="MinimizeAll_Click" Margin="2" 
+                            Padding="5,2" FontSize="10"/>
+                    <TextBlock x:Name="WindowCountText" Text="Windows: 0" 
+                              VerticalAlignment="Center" Margin="10,0" FontSize="10"/>
+                </StackPanel>
+                
+                <!-- 환영 메시지 (윈도우가 없을 때만 표시) -->
+                <TextBlock x:Name="WelcomeMessage" 
+                           Text="데이터 → 데이터 가져오기를 선택하여 CSV 파일을 로드하세요" 
+                           FontSize="18" 
                            FontWeight="Light"
                            HorizontalAlignment="Center" 
                            VerticalAlignment="Center"
