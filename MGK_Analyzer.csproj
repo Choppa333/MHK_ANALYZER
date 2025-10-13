@@ -7,7 +7,13 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
   </PropertyGroup>
+
+  <ItemGroup>
+    <None Include=".github\instructions\syncfusion.instructions.md" />
+    <None Include="Samples\SfChartSampleProject\SfChartSampleProject.csproj" />
+  </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="Syncfusion.SfChart.WPF" Version="31.1.17" />
@@ -16,5 +22,13 @@
     <PackageReference Include="Syncfusion.Themes.MaterialDark.WPF" Version="31.1.17" />
     <PackageReference Include="Syncfusion.Themes.MaterialLight.WPF" Version="31.1.17" />
   </ItemGroup>
+
+  <!-- Exclude sample files from build until XAML namespaces are finalized -->
+  <ItemGroup>
+    <Page Remove="Samples\Syncfusion\SfChartSample.xaml" />
+    <Compile Remove="Samples\Syncfusion\SfChartSample.xaml.cs" />
+  </ItemGroup>
+
+  <!-- Add new sample project to repo as standalone project (no direct reference here) -->
 
 </Project>

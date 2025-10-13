@@ -1,0 +1,85 @@
+<Window x:Class="MGK_Analyzer.Controls.CustomSizeDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Chart Size Settings" Height="300" Width="400"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="NoResize"
+        FontFamily="Malgun Gothic">
+    
+    <Grid Margin="20">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+        
+        <!-- Header -->
+        <TextBlock Grid.Row="0" Text="Set Chart Window Size" 
+                   FontSize="16" FontWeight="SemiBold" Margin="0,0,0,20"/>
+        
+        <!-- Content -->
+        <StackPanel Grid.Row="1">
+            <!-- Current Size -->
+            <GroupBox Header="Current Size" Margin="0,0,0,15">
+                <Grid Margin="10">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Grid.Column="0" Text="Width:" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                    <TextBlock Grid.Column="1" x:Name="CurrentWidthText" Text="800" VerticalAlignment="Center" FontWeight="Bold"/>
+                    <TextBlock Grid.Column="2" Text="Height:" VerticalAlignment="Center" Margin="20,0,10,0"/>
+                    <TextBlock Grid.Column="3" x:Name="CurrentHeightText" Text="600" VerticalAlignment="Center" FontWeight="Bold"/>
+                </Grid>
+            </GroupBox>
+            
+            <!-- New Size -->
+            <GroupBox Header="New Size">
+                <Grid Margin="10">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    
+                    <TextBlock Grid.Row="0" Grid.Column="0" Text="Width:" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                    <TextBox Grid.Row="0" Grid.Column="1" x:Name="WidthTextBox" Text="800" 
+                             Padding="5" VerticalAlignment="Center"/>
+                    <TextBlock Grid.Row="0" Grid.Column="2" Text="Height:" VerticalAlignment="Center" Margin="20,0,10,0"/>
+                    <TextBox Grid.Row="0" Grid.Column="3" x:Name="HeightTextBox" Text="600" 
+                             Padding="5" VerticalAlignment="Center"/>
+                    
+                    <TextBlock Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="4" 
+                               Text="(Min: 300 x 200, Recommended: 800 x 600)" 
+                               FontSize="10" Foreground="Gray" Margin="0,5,0,0"/>
+                    
+                    <!-- Preset buttons -->
+                    <StackPanel Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="4" 
+                               Orientation="Horizontal" Margin="0,10,0,0" HorizontalAlignment="Center">
+                        <Button Content="Small" Click="SetSmall_Click" Margin="0,0,5,0" Padding="10,3"/>
+                        <Button Content="Medium" Click="SetMedium_Click" Margin="0,0,5,0" Padding="10,3"/>
+                        <Button Content="Large" Click="SetLarge_Click" Margin="0,0,5,0" Padding="10,3"/>
+                        <Button Content="HD" Click="SetHD_Click" Padding="10,3"/>
+                    </StackPanel>
+                </Grid>
+            </GroupBox>
+        </StackPanel>
+        
+        <!-- Buttons -->
+        <StackPanel Grid.Row="2" Orientation="Horizontal" 
+                   HorizontalAlignment="Right" Margin="0,20,0,0">
+            <Button Content="OK" x:Name="OkButton" Click="Ok_Click" 
+                   Padding="20,5" Margin="0,0,10,0" IsDefault="True"/>
+            <Button Content="Cancel" x:Name="CancelButton" Click="Cancel_Click" 
+                   Padding="20,5" IsCancel="True"/>
+        </StackPanel>
+    </Grid>
+</Window>

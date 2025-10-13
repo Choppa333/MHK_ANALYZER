@@ -10,10 +10,47 @@
     
     <UserControl.Resources>
         <DropShadowEffect x:Key="WindowShadow" ShadowDepth="3" BlurRadius="10" Opacity="0.3"/>
+        
+        <!-- Panel Slide Animations -->
+        <Storyboard x:Key="PanelSlideInStoryboard">
+            <DoubleAnimation Storyboard.TargetName="ManagementPanel"
+                           Storyboard.TargetProperty="Width"
+                           From="0" To="250" Duration="0:0:0.2">
+                <DoubleAnimation.EasingFunction>
+                    <CubicEase EasingMode="EaseOut"/>
+                </DoubleAnimation.EasingFunction>
+            </DoubleAnimation>
+        </Storyboard>
+        <Storyboard x:Key="PanelSlideOutStoryboard">
+            <DoubleAnimation Storyboard.TargetName="ManagementPanel"
+                           Storyboard.TargetProperty="Width"
+                           From="250" To="0" Duration="0:0:0.15">
+                <DoubleAnimation.EasingFunction>
+                    <CubicEase EasingMode="EaseIn"/>
+                </DoubleAnimation.EasingFunction>
+            </DoubleAnimation>
+        </Storyboard>
     </UserControl.Resources>
     
     <Border Background="White" BorderBrush="Gray" BorderThickness="1"
             CornerRadius="5" Effect="{StaticResource WindowShadow}">
+        
+        <!-- Context Menu for Right-click resize options -->
+        <Border.ContextMenu>
+            <ContextMenu FontFamily="Malgun Gothic">
+                <MenuItem Header="Size Settings" FontWeight="Bold" IsEnabled="False"/>
+                <Separator/>
+                <MenuItem Header="Small (400 x 300)" Click="SetSmallSize_Click"/>
+                <MenuItem Header="Medium (800 x 600)" Click="SetMediumSize_Click"/>
+                <MenuItem Header="Large (1200 x 800)" Click="SetLargeSize_Click"/>
+                <MenuItem Header="HD (Max)" Click="SetHDSize_Click"/>
+                <Separator/>
+                <MenuItem Header="Custom..." Click="ShowCustomSizeDialog_Click"/>
+                <Separator/>
+                <MenuItem Header="Maximize" Click="Maximize_Click"/>
+                <MenuItem Header="Minimize" Click="Minimize_Click"/>
+            </ContextMenu>
+        </Border.ContextMenu>
         <Grid>
             <Grid.RowDefinitions>
                 <RowDefinition Height="30"/>
@@ -45,8 +82,7 @@
             <Grid Grid.Row="1">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="5"/>
-                    <ColumnDefinition Width="250"/>
+                    <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
                 
                 <!-- Syncfusion Chart -->
@@ -70,61 +106,266 @@
                     </syncfusion:SfChart.Legend>
                 </syncfusion:SfChart>
                 
-                <!-- GridSplitter -->
-                <GridSplitter Grid.Column="1" HorizontalAlignment="Stretch" 
-                             Background="LightGray"/>
-                
-                <!-- Data List Panel -->
-                <Border Grid.Column="2" Background="WhiteSmoke" 
-                        BorderBrush="LightGray" BorderThickness="1,0,0,0">
+                <!-- Management Panel Container -->
+                <Border Grid.Column="1" x:Name="ManagementPanelContainer" ClipToBounds="True">
                     <Grid>
-                        <Grid.RowDefinitions>
-                            <RowDefinition Height="Auto"/>
-                            <RowDefinition Height="*"/>
-                        </Grid.RowDefinitions>
-                        
-                        <TextBlock Grid.Row="0" Text="Data Series" 
-                                   FontWeight="Bold" Margin="5"
-                                   HorizontalAlignment="Center"
-                                   FontFamily="Malgun Gothic"/>
-                        
-                        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
-                            <ItemsControl ItemsSource="{Binding SeriesList, RelativeSource={RelativeSource AncestorType=UserControl}}">
-                                <ItemsControl.ItemTemplate>
-                                    <DataTemplate>
-                                        <Grid Margin="5,2">
-                                            <Grid.ColumnDefinitions>
-                                                <ColumnDefinition Width="Auto"/>
-                                                <ColumnDefinition Width="*"/>
-                                            </Grid.ColumnDefinitions>
-                                            
-                                            <CheckBox Grid.Column="0"
-                                                      IsChecked="{Binding IsSelected}"
-                                                      VerticalAlignment="Center"
-                                                      Margin="0,0,5,0"/>
-                                            
-                                            <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                                                <TextBlock Text="{Binding SeriesData.Name}" 
-                                                           FontWeight="SemiBold" FontSize="11"
-                                                           FontFamily="Malgun Gothic"/>
-                                                <TextBlock Text="{Binding SeriesData.Unit}" 
-                                                           FontSize="10" Foreground="Gray"
-                                                           FontFamily="Malgun Gothic"/>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="25"/>
+                        </Grid.ColumnDefinitions>
+
+                        <!-- Management Panel -->
+                        <Border Grid.Column="0" x:Name="ManagementPanel"
+                                Width="250" Background="WhiteSmoke" 
+                                BorderBrush="LightGray" BorderThickness="1,0,0,0"
+                                MouseLeave="ManagementPanel_MouseLeave">
+                            <Grid>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="*"/>
+                                </Grid.RowDefinitions>
+
+                                <!-- Panel Header -->
+                                <Border Grid.Row="0" Background="#FFE8E8E8" 
+                                        BorderBrush="#FFCCCCCC" BorderThickness="0,0,0,1"
+                                        Height="30">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        
+                                        <TextBlock Grid.Column="0" Text="Data Management" 
+                                                   FontSize="12" FontWeight="SemiBold"
+                                                   VerticalAlignment="Center" Margin="8,0"
+                                                   FontFamily="Malgun Gothic"/>
+                                        
+                                        <!-- Pin Button -->
+                                        <ToggleButton Grid.Column="1" x:Name="PanelPinButton"
+                                                      Width="24" Height="20" Margin="5"
+                                                      Checked="PanelPinButton_Checked"
+                                                      Unchecked="PanelPinButton_Unchecked"
+                                                      ToolTip="Pin/Unpin">
+                                            <TextBlock Text="PIN" FontSize="8"/>
+                                        </ToggleButton>
+                                    </Grid>
+                                </Border>
+
+                                <!-- Panel Content -->
+                                <TabControl Grid.Row="1" Background="Transparent" 
+                                           BorderThickness="0" Margin="5">
+                                    <!-- Series Tab -->
+                                    <TabItem Header="Series" FontFamily="Malgun Gothic" FontSize="11">
+                                        <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                            <ItemsControl ItemsSource="{Binding SeriesList, RelativeSource={RelativeSource AncestorType=UserControl}}">
+                                                <ItemsControl.ItemTemplate>
+                                                    <DataTemplate>
+                                                        <Border Background="White" 
+                                                               BorderBrush="#FFDDDDDD" 
+                                                               BorderThickness="1" 
+                                                               CornerRadius="3"
+                                                               Margin="2" Padding="5">
+                                                            <Grid>
+                                                                <Grid.ColumnDefinitions>
+                                                                    <ColumnDefinition Width="Auto"/>
+                                                                    <ColumnDefinition Width="*"/>
+                                                                </Grid.ColumnDefinitions>
+                                                                
+                                                                <CheckBox Grid.Column="0"
+                                                                          IsChecked="{Binding IsSelected}"
+                                                                          VerticalAlignment="Center"
+                                                                          Margin="0,0,8,0"/>
+                                                                
+                                                                <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                                                    <TextBlock Text="{Binding SeriesData.Name}" 
+                                                                               FontWeight="SemiBold" FontSize="11"
+                                                                               FontFamily="Malgun Gothic"/>
+                                                                    <TextBlock Text="{Binding SeriesData.Unit}" 
+                                                                               FontSize="10" Foreground="Gray"
+                                                                               FontFamily="Malgun Gothic"/>
+                                                                </StackPanel>
+                                                            </Grid>
+                                                        </Border>
+                                                    </DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                            </ItemsControl>
+                                        </ScrollViewer>
+                                    </TabItem>
+                                    
+                                    <!-- Properties Tab -->
+                                    <TabItem Header="Properties" FontFamily="Malgun Gothic" FontSize="11">
+                                        <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                            <StackPanel Margin="5">
+                                                <TextBlock Text="Chart Properties" FontWeight="Bold" 
+                                                          FontFamily="Malgun Gothic" Margin="0,0,0,10"/>
+                                                
+                                                <TextBlock Text="Title:" FontSize="10" 
+                                                          FontFamily="Malgun Gothic" Margin="0,5,0,2"/>
+                                                <TextBox Text="{Binding WindowTitle, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                        FontFamily="Malgun Gothic" Padding="3"/>
+                                                
+                                                <!-- Chart Size Settings -->
+                                                <TextBlock Text="Chart Size" FontWeight="Bold" 
+                                                          FontFamily="Malgun Gothic" Margin="0,15,0,5"/>
+                                                
+                                                <Grid>
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="Auto"/>
+                                                        <ColumnDefinition Width="*"/>
+                                                        <ColumnDefinition Width="Auto"/>
+                                                        <ColumnDefinition Width="*"/>
+                                                    </Grid.ColumnDefinitions>
+                                                    <Grid.RowDefinitions>
+                                                        <RowDefinition Height="Auto"/>
+                                                        <RowDefinition Height="Auto"/>
+                                                        <RowDefinition Height="Auto"/>
+                                                    </Grid.RowDefinitions>
+                                                    
+                                                    <TextBlock Grid.Row="0" Grid.Column="0" Text="Width:" FontSize="10" 
+                                                              VerticalAlignment="Center" Margin="0,0,5,0"/>
+                                                    <TextBox Grid.Row="0" Grid.Column="1" x:Name="WidthTextBox"
+                                                            Text="{Binding ActualWidth, RelativeSource={RelativeSource AncestorType=UserControl}, StringFormat=F0, Mode=OneWay}"
+                                                            FontFamily="Malgun Gothic" Padding="3" Margin="0,0,10,5"/>
+                                                    
+                                                    <TextBlock Grid.Row="0" Grid.Column="2" Text="Height:" FontSize="10" 
+                                                              VerticalAlignment="Center" Margin="0,0,5,0"/>
+                                                    <TextBox Grid.Row="0" Grid.Column="3" x:Name="HeightTextBox"
+                                                            Text="{Binding ActualHeight, RelativeSource={RelativeSource AncestorType=UserControl}, StringFormat=F0, Mode=OneWay}"
+                                                            FontFamily="Malgun Gothic" Padding="3" Margin="0,0,0,5"/>
+                                                    
+                                                    <Button Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2" 
+                                                           Content="Apply Size" Click="ApplySize_Click"
+                                                           FontFamily="Malgun Gothic" Padding="5" Margin="0,5"/>
+                                                    
+                                                    <Button Grid.Row="1" Grid.Column="2" Grid.ColumnSpan="2" 
+                                                           Content="Reset Size" Click="ResetSize_Click"
+                                                           FontFamily="Malgun Gothic" Padding="5" Margin="0,5"/>
+                                                </Grid>
+                                                
+                                                <!-- Preset Size Buttons -->
+                                                <TextBlock Text="Preset Sizes" FontWeight="Bold" 
+                                                          FontFamily="Malgun Gothic" Margin="0,10,0,5"/>
+                                                <StackPanel Orientation="Horizontal" Margin="0,5">
+                                                    <Button Content="Small (400x300)" Click="SetSmallSize_Click"
+                                                           FontFamily="Malgun Gothic" Padding="5" Margin="0,0,5,0" FontSize="9"/>
+                                                    <Button Content="Medium (800x600)" Click="SetMediumSize_Click"
+                                                           FontFamily="Malgun Gothic" Padding="5" Margin="0,0,5,0" FontSize="9"/>
+                                                </StackPanel>
+                                                <StackPanel Orientation="Horizontal" Margin="0,5">
+                                                    <Button Content="Large (1200x800)" Click="SetLargeSize_Click"
+                                                           FontFamily="Malgun Gothic" Padding="5" Margin="0,0,5,0" FontSize="9"/>
+                                                    <Button Content="HD (1920x1080)" Click="SetHDSize_Click"
+                                                           FontFamily="Malgun Gothic" Padding="5" Margin="0,0,5,0" FontSize="9"/>
+                                                </StackPanel>
+                                                
+                                                <TextBlock Text="Additional Properties" FontWeight="Bold" 
+                                                          FontFamily="Malgun Gothic" Margin="0,15,0,5"/>
+                                                <TextBlock Text="Position, Zoom, Export options..." FontSize="10" 
+                                                          Foreground="Gray" FontFamily="Malgun Gothic"/>
                                             </StackPanel>
-                                        </Grid>
-                                    </DataTemplate>
-                                </ItemsControl.ItemTemplate>
-                            </ItemsControl>
-                        </ScrollViewer>
+                                        </ScrollViewer>
+                                    </TabItem>
+                                    
+                                    <!-- Cursor Tab -->
+                                    <TabItem Header="Cursor" FontFamily="Malgun Gothic" FontSize="11">
+                                        <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                            <StackPanel Margin="5">
+                                                <TextBlock Text="Cursor Management" FontWeight="Bold" 
+                                                          FontFamily="Malgun Gothic" Margin="0,0,0,10"/>
+                                                
+                                                <Button Content="Add Cursor" Padding="5" 
+                                                       FontFamily="Malgun Gothic" Margin="0,5"/>
+                                                <Button Content="Remove Cursor" Padding="5" 
+                                                       FontFamily="Malgun Gothic" Margin="0,5"/>
+                                                
+                                                <TextBlock Text="(To be implemented)" FontSize="10" 
+                                                          Foreground="Gray" FontFamily="Malgun Gothic" Margin="0,10"/>
+                                            </StackPanel>
+                                        </ScrollViewer>
+                                    </TabItem>
+                                </TabControl>
+                            </Grid>
+                        </Border>
+
+                        <!-- Collapsed Tab Button -->
+                        <Border Grid.Column="1" x:Name="ManagementPanelTab"
+                                Background="#FF2D2D30" 
+                                BorderBrush="#FF3E3E42" BorderThickness="1,0,0,0"
+                                Cursor="Hand" Visibility="Collapsed"
+                                MouseEnter="ManagementPanelTab_MouseEnter"
+                                MouseDown="ManagementPanelTab_MouseDown">
+                            <StackPanel Orientation="Vertical" VerticalAlignment="Center">
+                                <TextBlock Text="D" FontSize="10" Foreground="White" FontWeight="Bold"
+                                           HorizontalAlignment="Center" Margin="1" FontFamily="Malgun Gothic"/>
+                                <TextBlock Text="A" FontSize="8" Foreground="#FFAAAAAA" 
+                                           HorizontalAlignment="Center" Margin="0,1" FontFamily="Malgun Gothic"/>
+                                <TextBlock Text="T" FontSize="8" Foreground="#FFAAAAAA" 
+                                           HorizontalAlignment="Center" Margin="0,1" FontFamily="Malgun Gothic"/>
+                                <TextBlock Text="A" FontSize="8" Foreground="#FFAAAAAA" 
+                                           HorizontalAlignment="Center" Margin="0,1" FontFamily="Malgun Gothic"/>
+                            </StackPanel>
+                        </Border>
                     </Grid>
                 </Border>
             </Grid>
             
-            <!-- Resize Handle -->
+            <!-- Resize Handles - All directions resizable -->
+            <!-- Top Edge -->
+            <Rectangle Height="5" Fill="Transparent" 
+                      HorizontalAlignment="Stretch" VerticalAlignment="Top"
+                      Cursor="SizeNS" MouseLeftButtonDown="ResizeTop_MouseLeftButtonDown"
+                      Margin="5,0,5,0" ToolTip="Drag top edge to resize height"/>
+            
+            <!-- Bottom Edge -->
+            <Rectangle Height="5" Fill="Transparent" 
+                      HorizontalAlignment="Stretch" VerticalAlignment="Bottom"
+                      Cursor="SizeNS" MouseLeftButtonDown="ResizeBottom_MouseLeftButtonDown"
+                      Margin="5,0,5,0" ToolTip="Drag bottom edge to resize height"/>
+            
+            <!-- Left Edge -->
+            <Rectangle Width="5" Fill="Transparent" 
+                      HorizontalAlignment="Left" VerticalAlignment="Stretch"
+                      Cursor="SizeWE" MouseLeftButtonDown="ResizeLeft_MouseLeftButtonDown"
+                      Margin="0,5,0,5" ToolTip="Drag left edge to resize width"/>
+            
+            <!-- Right Edge -->
+            <Rectangle Width="5" Fill="Transparent" 
+                      HorizontalAlignment="Right" VerticalAlignment="Stretch"
+                      Cursor="SizeWE" MouseLeftButtonDown="ResizeRight_MouseLeftButtonDown"
+                      Margin="0,5,0,5" ToolTip="Drag right edge to resize width"/>
+            
+            <!-- Corner Handles -->
+            <!-- Top-Left Corner -->
+            <Rectangle Width="10" Height="10" Fill="DarkGray" 
+                      HorizontalAlignment="Left" VerticalAlignment="Top"
+                      Cursor="SizeNWSE" MouseLeftButtonDown="ResizeTopLeft_MouseLeftButtonDown"
+                      Margin="0,0,0,0" ToolTip="Drag corner to resize"/>
+            
+            <!-- Top-Right Corner -->
+            <Rectangle Width="10" Height="10" Fill="DarkGray" 
+                      HorizontalAlignment="Right" VerticalAlignment="Top"
+                      Cursor="SizeNESW" MouseLeftButtonDown="ResizeTopRight_MouseLeftButtonDown"
+                      Margin="0,0,0,0" ToolTip="Drag corner to resize"/>
+            
+            <!-- Bottom-Left Corner -->
+            <Rectangle Width="10" Height="10" Fill="DarkGray" 
+                      HorizontalAlignment="Left" VerticalAlignment="Bottom"
+                      Cursor="SizeNESW" MouseLeftButtonDown="ResizeBottomLeft_MouseLeftButtonDown"
+                      Margin="0,0,0,0" ToolTip="Drag corner to resize"/>
+            
+            <!-- Bottom-Right Corner -->
             <Rectangle Width="15" Height="15" Fill="Gray" 
                       HorizontalAlignment="Right" VerticalAlignment="Bottom"
-                      Cursor="SizeNWSE" MouseLeftButtonDown="ResizeHandle_MouseLeftButtonDown"
-                      Margin="0,0,2,2"/>
+                      Cursor="SizeNWSE" MouseLeftButtonDown="ResizeBottomRight_MouseLeftButtonDown"
+                      Margin="0,0,0,0" ToolTip="Drag corner to resize"/>
+            
+            <!-- Resize Indicator (bottom-right corner indicator) -->
+            <Path Data="M 0,10 L 10,10 L 10,0" Stroke="White" StrokeThickness="1"
+                  HorizontalAlignment="Right" VerticalAlignment="Bottom"
+                  Margin="0,0,8,8" IsHitTestVisible="False"/>
+            <Path Data="M 3,10 L 10,10 L 10,3" Stroke="White" StrokeThickness="1"
+                  HorizontalAlignment="Right" VerticalAlignment="Bottom"
+                  Margin="0,0,5,5" IsHitTestVisible="False"/>
         </Grid>
     </Border>
 </UserControl>

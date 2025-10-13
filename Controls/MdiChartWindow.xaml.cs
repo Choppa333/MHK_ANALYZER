@@ -9,20 +9,51 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Media.Animation;
 using MGK_Analyzer.Models;
 using MGK_Analyzer.Services;
 using Syncfusion.UI.Xaml.Charts;
 
 namespace MGK_Analyzer.Controls
 {
+    public enum ResizeDirection
+    {
+        None,
+        Top,
+        Bottom,
+        Left,
+        Right,
+        TopLeft,
+        TopRight,
+        BottomLeft,
+        BottomRight
+    }
+
     public partial class MdiChartWindow : UserControl, INotifyPropertyChanged
     {
         private bool _isDragging = false;
         private bool _isResizing = false;
         private Point _lastPosition;
         private static int _globalZIndex = 1;
-        private MemoryOptimizedDataSet _dataSet;
-        private string _windowTitle;
+        private MemoryOptimizedDataSet? _dataSet;
+        private bool _isManagementPanelExpanded = true;
+        private bool _isManagementPanelPinned = false;
+        
+        // 윈도우 크기 상태 저장
+        private double _normalWidth = 800;
+        private double _normalHeight = 600;
+        private double _normalLeft = 0;
+        private double _normalTop = 0;
+        private bool _isMaximized = false;
+        private bool _isMinimized = false;
+        
+        // 리사이즈 상태 추적
+        private ResizeDirection _resizeDirection = ResizeDirection.None;
+        private Point _resizeStartPosition;
+        private double _resizeStartWidth;
+        private double _resizeStartHeight;
+        private double _resizeStartLeft;
+        private double _resizeStartTop;
 
         public static readonly DependencyProperty WindowTitleProperty = 
             DependencyProperty.Register("WindowTitle", typeof(string), typeof(MdiChartWindow), 
@@ -34,7 +65,7 @@ namespace MGK_Analyzer.Controls
             set { SetValue(WindowTitleProperty, value); OnPropertyChanged(); }
         }
 
-        public MemoryOptimizedDataSet DataSet
+        public MemoryOptimizedDataSet? DataSet
         {
             get => _dataSet;
             set 
@@ -51,14 +82,117 @@ namespace MGK_Analyzer.Controls
 
         public ObservableCollection<ChartSeriesViewModel> SeriesList { get; set; } = new ObservableCollection<ChartSeriesViewModel>();
 
-        public event EventHandler WindowClosed;
-        public event EventHandler WindowActivated;
+        public event EventHandler? WindowClosed;
+        public event EventHandler? WindowActivated;
 
         public MdiChartWindow()
         {
             InitializeComponent();
             DataContext = this;
+            
+            // 초기 상태: 패널 표시
+            _isManagementPanelExpanded = true;
+            _isManagementPanelPinned = false;
         }
+
+        #region 관리 패널 자동 숨김/고정 기능
+
+        private void ManagementPanelTab_MouseEnter(object sender, MouseEventArgs e)
+        {
+            if (!_isManagementPanelExpanded && !_isManagementPanelPinned)
+            {
+                ExpandManagementPanel(true);
+            }
+        }
+
+        private void ManagementPanelTab_MouseDown(object sender, MouseButtonEventArgs e)
+        {
+            if (!_isManagementPanelExpanded)
+            {
+                ExpandManagementPanel(true);
+            }
+        }
+
+        private void ManagementPanel_MouseLeave(object sender, MouseEventArgs e)
+        {
+            var position = e.GetPosition(ManagementPanel);
+            var bounds = new Rect(0, 0, ManagementPanel.ActualWidth, ManagementPanel.ActualHeight);
+            
+            if (_isManagementPanelExpanded && !_isManagementPanelPinned && !bounds.Contains(position))
+            {
+                var timer = new System.Windows.Threading.DispatcherTimer();
+                timer.Interval = TimeSpan.FromMilliseconds(300);
+                timer.Tick += (s, args) =>
+                {
+                    timer.Stop();
+                    if (!_isManagementPanelPinned && !ManagementPanel.IsMouseOver)
+                    {
+                        CollapseManagementPanel(true);
+                    }
+                };
+                timer.Start();
+            }
+        }
+
+        private void PanelPinButton_Checked(object sender, RoutedEventArgs e)
+        {
+            _isManagementPanelPinned = true;
+            
+            if (!_isManagementPanelExpanded)
+            {
+                ExpandManagementPanel(true);
+            }
+        }
+
+        private void PanelPinButton_Unchecked(object sender, RoutedEventArgs e)
+        {
+            _isManagementPanelPinned = false;
+        }
+
+        private void ExpandManagementPanel(bool animated)
+        {
+            _isManagementPanelExpanded = true;
+            
+            if (animated)
+            {
+                var storyboard = FindResource("PanelSlideInStoryboard") as Storyboard;
+                if (storyboard != null)
+                {
+                    storyboard.Begin();
+                }
+            }
+            else
+            {
+                ManagementPanel.Width = 250;
+            }
+            
+            ManagementPanelTab.Visibility = Visibility.Collapsed;
+        }
+
+        private void CollapseManagementPanel(bool animated)
+        {
+            _isManagementPanelExpanded = false;
+            
+            if (animated)
+            {
+                var storyboard = FindResource("PanelSlideOutStoryboard") as Storyboard;
+                if (storyboard != null)
+                {
+                    storyboard.Completed += (s, e) => 
+                    {
+                        ManagementPanelTab.Visibility = Visibility.Visible;
+                    };
+                    storyboard.Begin();
+                }
+            }
+            else
+            {
+                ManagementPanel.Width = 0;
+                ManagementPanelTab.Visibility = Visibility.Visible;
+            }
+        }
+
+        #endregion
 
         private void InitializeSeriesList()
         {
@@ -400,15 +534,106 @@ namespace MGK_Analyzer.Controls
                 if (canvas == null) return;
 
                 var currentPosition = e.GetPosition(canvas);
-                
-                var newWidth = Math.Max(400, currentPosition.X - Canvas.GetLeft(this));
-                var newHeight = Math.Max(300, currentPosition.Y - Canvas.GetTop(this));
-                
-                this.Width = Math.Min(newWidth, canvas.ActualWidth - Canvas.GetLeft(this));
-                this.Height = Math.Min(newHeight, canvas.ActualHeight - Canvas.GetTop(this));
+                PerformResize(currentPosition);
             }
 
             base.OnMouseMove(e);
+        }
+
+        private void PerformResize(Point currentPosition)
+        {
+            var canvas = (Canvas)this.Parent;
+            if (canvas == null) return;
+
+            var deltaX = currentPosition.X - _resizeStartPosition.X;
+            var deltaY = currentPosition.Y - _resizeStartPosition.Y;
+
+            var newWidth = _resizeStartWidth;
+            var newHeight = _resizeStartHeight;
+            var newLeft = _resizeStartLeft;
+            var newTop = _resizeStartTop;
+
+            // 최소 크기 제한
+            const double minWidth = 300;
+            const double minHeight = 200;
+
+            switch (_resizeDirection)
+            {
+                case ResizeDirection.Right:
+                    newWidth = Math.Max(minWidth, _resizeStartWidth + deltaX);
+                    break;
+
+                case ResizeDirection.Bottom:
+                    newHeight = Math.Max(minHeight, _resizeStartHeight + deltaY);
+                    break;
+
+                case ResizeDirection.Left:
+                    var newWidthLeft = Math.Max(minWidth, _resizeStartWidth - deltaX);
+                    if (newWidthLeft >= minWidth)
+                    {
+                        newWidth = newWidthLeft;
+                        newLeft = _resizeStartLeft + deltaX;
+                    }
+                    break;
+
+                case ResizeDirection.Top:
+                    var newHeightTop = Math.Max(minHeight, _resizeStartHeight - deltaY);
+                    if (newHeightTop >= minHeight)
+                    {
+                        newHeight = newHeightTop;
+                        newTop = _resizeStartTop + deltaY;
+                    }
+                    break;
+
+                case ResizeDirection.TopLeft:
+                    var newWidthTL = Math.Max(minWidth, _resizeStartWidth - deltaX);
+                    var newHeightTL = Math.Max(minHeight, _resizeStartHeight - deltaY);
+                    if (newWidthTL >= minWidth && newHeightTL >= minHeight)
+                    {
+                        newWidth = newWidthTL;
+                        newHeight = newHeightTL;
+                        newLeft = _resizeStartLeft + deltaX;
+                        newTop = _resizeStartTop + deltaY;
+                    }
+                    break;
+
+                case ResizeDirection.TopRight:
+                    var newWidthTR = Math.Max(minWidth, _resizeStartWidth + deltaX);
+                    var newHeightTR = Math.Max(minHeight, _resizeStartHeight - deltaY);
+                    if (newWidthTR >= minWidth && newHeightTR >= minHeight)
+                    {
+                        newWidth = newWidthTR;
+                        newHeight = newHeightTR;
+                        newTop = _resizeStartTop + deltaY;
+                    }
+                    break;
+
+                case ResizeDirection.BottomLeft:
+                    var newWidthBL = Math.Max(minWidth, _resizeStartWidth - deltaX);
+                    var newHeightBL = Math.Max(minHeight, _resizeStartHeight + deltaY);
+                    if (newWidthBL >= minWidth && newHeightBL >= minHeight)
+                    {
+                        newWidth = newWidthBL;
+                        newHeight = newHeightBL;
+                        newLeft = _resizeStartLeft + deltaX;
+                    }
+                    break;
+
+                case ResizeDirection.BottomRight:
+                    newWidth = Math.Max(minWidth, _resizeStartWidth + deltaX);
+                    newHeight = Math.Max(minHeight, _resizeStartHeight + deltaY);
+                    break;
+            }
+
+            // 캔버스 경계 체크
+            if (newLeft >= 0 && newLeft + newWidth <= canvas.ActualWidth &&
+                newTop >= 0 && newTop + newHeight <= canvas.ActualHeight)
+            {
+                this.Width = newWidth;
+                this.Height = newHeight;
+                Canvas.SetLeft(this, newLeft);
+                Canvas.SetTop(this, newTop);
+            }
         }
 
         protected override void OnMouseLeftButtonUp(MouseButtonEventArgs e)
@@ -417,33 +642,174 @@ namespace MGK_Analyzer.Controls
             {
                 _isDragging = false;
                 _isResizing = false;
+                _resizeDirection = ResizeDirection.None;
                 this.ReleaseMouseCapture();
             }
             base.OnMouseLeftButtonUp(e);
         }
 
-        private void ResizeHandle_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+        private void StartResize(ResizeDirection direction, Point startPosition)
         {
             _isResizing = true;
+            _resizeDirection = direction;
+            _resizeStartPosition = startPosition;
+            _resizeStartWidth = this.ActualWidth;
+            _resizeStartHeight = this.ActualHeight;
+            _resizeStartLeft = Canvas.GetLeft(this);
+            _resizeStartTop = Canvas.GetTop(this);
             this.CaptureMouse();
-            e.Handled = true;
+            
+            // 활성 윈도우로 설정
+            Canvas.SetZIndex(this, ++_globalZIndex);
+            WindowActivated?.Invoke(this, EventArgs.Empty);
+        }
+
+        // 모든 리사이즈 핸들러들
+        private void ResizeTop_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+        {
+            var canvas = (Canvas)this.Parent;
+            if (canvas != null)
+            {
+                StartResize(ResizeDirection.Top, e.GetPosition(canvas));
+                e.Handled = true;
+            }
+        }
+
+        private void ResizeBottom_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+        {
+            var canvas = (Canvas)this.Parent;
+            if (canvas != null)
+            {
+                StartResize(ResizeDirection.Bottom, e.GetPosition(canvas));
+                e.Handled = true;
+            }
+        }
+
+        private void ResizeLeft_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+        {
+            var canvas = (Canvas)this.Parent;
+            if (canvas != null)
+            {
+                StartResize(ResizeDirection.Left, e.GetPosition(canvas));
+                e.Handled = true;
+            }
+        }
+
+        private void ResizeRight_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+        {
+            var canvas = (Canvas)this.Parent;
+            if (canvas != null)
+            {
+                StartResize(ResizeDirection.Right, e.GetPosition(canvas));
+                e.Handled = true;
+            }
+        }
+
+        private void ResizeTopLeft_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+        {
+            var canvas = (Canvas)this.Parent;
+            if (canvas != null)
+            {
+                StartResize(ResizeDirection.TopLeft, e.GetPosition(canvas));
+                e.Handled = true;
+            }
+        }
+
+        private void ResizeTopRight_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+        {
+            var canvas = (Canvas)this.Parent;
+            if (canvas != null)
+            {
+                StartResize(ResizeDirection.TopRight, e.GetPosition(canvas));
+                e.Handled = true;
+            }
+        }
+
+        private void ResizeBottomLeft_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+        {
+            var canvas = (Canvas)this.Parent;
+            if (canvas != null)
+            {
+                StartResize(ResizeDirection.BottomLeft, e.GetPosition(canvas));
+                e.Handled = true;
+            }
+        }
+
+        private void ResizeBottomRight_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+        {
+            var canvas = (Canvas)this.Parent;
+            if (canvas != null)
+            {
+                StartResize(ResizeDirection.BottomRight, e.GetPosition(canvas));
+                e.Handled = true;
+            }
+        }
+
+        // 기존 메서드 유지 (호환성을 위해)
+        private void ResizeHandle_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+        {
+            ResizeBottomRight_MouseLeftButtonDown(sender, e);
         }
 
         private void Minimize_Click(object sender, RoutedEventArgs e)
         {
-            this.Height = 30; // 타이틀바만 보이도록
+            if (_isMinimized)
+            {
+                // 최소화 해제 - 이전 크기로 복원
+                RestoreNormalSize();
+            }
+            else
+            {
+                // 최소화 - 타이틀바만 보이도록
+                SaveCurrentSize();
+                this.Height = 30;
+                _isMinimized = true;
+                _isMaximized = false;
+            }
         }
 
         private void Maximize_Click(object sender, RoutedEventArgs e)
         {
             var canvas = (Canvas)this.Parent;
-            if (canvas != null)
+            if (canvas == null) return;
+            
+            if (_isMaximized)
             {
+                // 최대화 해제 - 기본 크기로 복원
+                RestoreNormalSize();
+            }
+            else
+            {
+                // 최대화
+                SaveCurrentSize();
                 this.Width = canvas.ActualWidth - 10;
                 this.Height = canvas.ActualHeight - 10;
                 Canvas.SetLeft(this, 5);
                 Canvas.SetTop(this, 5);
+                _isMaximized = true;
+                _isMinimized = false;
             }
+        }
+        
+        private void SaveCurrentSize()
+        {
+            if (!_isMaximized && !_isMinimized)
+            {
+                _normalWidth = this.ActualWidth;
+                _normalHeight = this.ActualHeight;
+                _normalLeft = Canvas.GetLeft(this);
+                _normalTop = Canvas.GetTop(this);
+            }
+        }
+        
+        private void RestoreNormalSize()
+        {
+            this.Width = _normalWidth;
+            this.Height = _normalHeight;
+            Canvas.SetLeft(this, _normalLeft);
+            Canvas.SetTop(this, _normalTop);
+            _isMaximized = false;
+            _isMinimized = false;
         }
 
         public void Close_Click(object sender, RoutedEventArgs e)
@@ -451,8 +817,117 @@ namespace MGK_Analyzer.Controls
             WindowClosed?.Invoke(this, EventArgs.Empty);
         }
 
-        public event PropertyChangedEventHandler PropertyChanged;
-        protected virtual void OnPropertyChanged([CallerMemberName] string propertyName = null)
+        #region 크기 설정 메서드들
+
+        private void ApplySize_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                if (double.TryParse(WidthTextBox.Text, out double width) && 
+                    double.TryParse(HeightTextBox.Text, out double height))
+                {
+                    SetWindowSize(width, height);
+                }
+                else
+                {
+                    MessageBox.Show("올바른 숫자를 입력해주세요.", "크기 설정", MessageBoxButton.OK, MessageBoxImage.Warning);
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"크기 설정 중 오류가 발생했습니다: {ex.Message}", "오류", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
+        private void ResetSize_Click(object sender, RoutedEventArgs e)
+        {
+            SetWindowSize(800, 600);
+        }
+
+        private void SetSmallSize_Click(object sender, RoutedEventArgs e)
+        {
+            SetWindowSize(400, 300);
+        }
+
+        private void SetMediumSize_Click(object sender, RoutedEventArgs e)
+        {
+            SetWindowSize(800, 600);
+        }
+
+        private void SetLargeSize_Click(object sender, RoutedEventArgs e)
+        {
+            SetWindowSize(1200, 800);
+        }
+
+        private void SetHDSize_Click(object sender, RoutedEventArgs e)
+        {
+            var canvas = (Canvas)this.Parent;
+            if (canvas != null)
+            {
+                // 캔버스 크기를 고려하여 적절히 조절
+                var maxWidth = Math.Min(1920, canvas.ActualWidth - 50);
+                var maxHeight = Math.Min(1080, canvas.ActualHeight - 50);
+                SetWindowSize(maxWidth, maxHeight);
+            }
+            else
+            {
+                SetWindowSize(1200, 800); // 캔버스가 없으면 기본 크기
+            }
+        }
+
+        private void SetWindowSize(double width, double height)
+        {
+            var canvas = (Canvas)this.Parent;
+            if (canvas == null) return;
+
+            // 최소/최대 크기 제한
+            const double minWidth = 300;
+            const double minHeight = 200;
+            
+            width = Math.Max(minWidth, Math.Min(width, canvas.ActualWidth - 20));
+            height = Math.Max(minHeight, Math.Min(height, canvas.ActualHeight - 20));
+
+            // 현재 위치가 새 크기에서 캔버스를 벗어나지 않도록 조정
+            var currentLeft = Canvas.GetLeft(this);
+            var currentTop = Canvas.GetTop(this);
+            
+            if (currentLeft + width > canvas.ActualWidth)
+            {
+                currentLeft = Math.Max(0, canvas.ActualWidth - width);
+                Canvas.SetLeft(this, currentLeft);
+            }
+            
+            if (currentTop + height > canvas.ActualHeight)
+            {
+                currentTop = Math.Max(0, canvas.ActualHeight - height);
+                Canvas.SetTop(this, currentTop);
+            }
+
+            this.Width = width;
+            this.Height = height;
+            
+            // 최대화 상태 해제
+            _isMaximized = false;
+            _isMinimized = false;
+        }
+
+        private void ShowCustomSizeDialog_Click(object sender, RoutedEventArgs e)
+        {
+            var dialog = new CustomSizeDialog(this.ActualWidth, this.ActualHeight)
+            {
+                Owner = Window.GetWindow(this)
+            };
+
+            if (dialog.ShowDialog() == true)
+            {
+                SetWindowSize(dialog.SelectedWidth, dialog.SelectedHeight);
+            }
+        }
+
+        #endregion
+
+        public event PropertyChangedEventHandler? PropertyChanged;
+        protected virtual void OnPropertyChanged([CallerMemberName] string? propertyName = null)
         {
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
         }
