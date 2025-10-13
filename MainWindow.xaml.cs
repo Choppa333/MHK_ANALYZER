@@ -26,9 +26,9 @@ namespace MGK_Analyzer
         private AppSettings _settings;
         private bool _isFileExplorerExpanded = false;
         private bool _isFileExplorerPinned = false;
-        private MdiWindowManager _mdiManager;
+        private MdiWindowManager? _mdiManager;
         private CsvDataLoader _csvLoader;
-        private LogViewerWindow _logViewerWindow;
+        private LogViewerWindow? _logViewerWindow;
 
         public MainWindow()
         {
@@ -578,6 +578,333 @@ namespace MGK_Analyzer
                 MessageBox.Show($"로그 뷰어를 열 수 없습니다: {ex.Message}", "오류", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
+
+        #endregion
+
+        #region 시험 유형 이벤트 핸들러
+
+        private void StandardTest_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                UpdateStatusBar("일반시험 차트를 생성하고 있습니다...");
+                PerformanceLogger.Instance.LogInfo("일반시험 모드 선택", "TestMode");
+                
+                // 샘플 차트 데이터 생성
+                var sampleDataSet = CreateStandardTestSampleData();
+                
+                // MDI 차트 윈도우 생성
+                var chartWindow = _mdiManager.CreateChartWindow("일반시험 - " + DateTime.Now.ToString("HH:mm:ss"), sampleDataSet);
+                
+                UpdateStatusBar($"일반시험 차트가 생성되었습니다. (샘플 데이터: {sampleDataSet.TotalSamples}개)");
+                PerformanceLogger.Instance.LogInfo("일반시험 차트 생성 완료", "TestMode");
+                UpdateWindowCount();
+                
+                // 환영 메시지 숨기기
+                WelcomeMessage.Visibility = Visibility.Collapsed;
+            }
+            catch (Exception ex)
+            {
+                PerformanceLogger.Instance.LogError($"일반시험 모드 오류: {ex.Message}", "TestMode");
+                MessageBox.Show($"일반시험 차트 생성 중 오류 발생:\n{ex.Message}", 
+                              "오류", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+        
+        private MemoryOptimizedDataSet CreateStandardTestSampleData()
+        {
+            var dataSet = new MemoryOptimizedDataSet
+            {
+                FileName = "일반시험 샘플 데이터",
+                BaseTime = DateTime.Now.AddSeconds(-100),
+                TimeInterval = 0.1f, // 0.1초 간격
+                TotalSamples = 1000
+            };
+            
+            // 전압 시리즈 (사인파)
+            var voltageSeries = new SeriesData
+            {
+                Name = "전압",
+                Unit = "V",
+                DataType = typeof(double),
+                Color = new SolidColorBrush(Colors.Blue),
+                IsVisible = true
+            };
+            voltageSeries.Values = new float[1000];
+            for (int i = 0; i < 1000; i++)
+            {
+                voltageSeries.Values[i] = (float)(220 + 10 * Math.Sin(i * 0.1));
+            }
+            voltageSeries.MinValue = voltageSeries.Values.Min();
+            voltageSeries.MaxValue = voltageSeries.Values.Max();
+            voltageSeries.AvgValue = voltageSeries.Values.Average();
+            
+            // 전류 시리즈 (코사인파)
+            var currentSeries = new SeriesData
+            {
+                Name = "전류",
+                Unit = "A",
+                DataType = typeof(double),
+                Color = new SolidColorBrush(Colors.Red),
+                IsVisible = true
+            };
+            currentSeries.Values = new float[1000];
+            for (int i = 0; i < 1000; i++)
+            {
+                currentSeries.Values[i] = (float)(10 + 2 * Math.Cos(i * 0.1));
+            }
+            currentSeries.MinValue = currentSeries.Values.Min();
+            currentSeries.MaxValue = currentSeries.Values.Max();
+            currentSeries.AvgValue = currentSeries.Values.Average();
+            
+            // 온도 시리즈 (선형 증가)
+            var tempSeries = new SeriesData
+            {
+                Name = "온도",
+                Unit = "°C",
+                DataType = typeof(double),
+                Color = new SolidColorBrush(Colors.Orange),
+                IsVisible = true
+            };
+            tempSeries.Values = new float[1000];
+            for (int i = 0; i < 1000; i++)
+            {
+                tempSeries.Values[i] = (float)(25 + i * 0.05 + Math.Sin(i * 0.3) * 2);
+            }
+            tempSeries.MinValue = tempSeries.Values.Min();
+            tempSeries.MaxValue = tempSeries.Values.Max();
+            tempSeries.AvgValue = tempSeries.Values.Average();
+            
+            dataSet.SeriesData.Add(voltageSeries.Name, voltageSeries);
+            dataSet.SeriesData.Add(currentSeries.Name, currentSeries);
+            dataSet.SeriesData.Add(tempSeries.Name, tempSeries);
+            
+            return dataSet;
+        }
+
+        private void LoadTest_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                UpdateStatusBar("부하시험 차트를 생성하고 있습니다...");
+                PerformanceLogger.Instance.LogInfo("부하시험 모드 선택", "TestMode");
+                
+                // 부하시험 샘플 데이터 생성
+                var sampleDataSet = CreateLoadTestSampleData();
+                
+                // MDI 차트 윈도우 생성
+                var chartWindow = _mdiManager.CreateChartWindow("부하시험 - " + DateTime.Now.ToString("HH:mm:ss"), sampleDataSet);
+                
+                UpdateStatusBar($"부하시험 차트가 생성되었습니다. (샘플 데이터: {sampleDataSet.TotalSamples}개)");
+                PerformanceLogger.Instance.LogInfo("부하시험 차트 생성 완료", "TestMode");
+                UpdateWindowCount();
+                
+                WelcomeMessage.Visibility = Visibility.Collapsed;
+            }
+            catch (Exception ex)
+            {
+                PerformanceLogger.Instance.LogError($"부하시험 모드 오류: {ex.Message}", "TestMode");
+                MessageBox.Show($"부하시험 차트 생성 중 오류 발생:\n{ex.Message}", 
+                              "오류", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+        
+        private MemoryOptimizedDataSet CreateLoadTestSampleData()
+        {
+            var dataSet = new MemoryOptimizedDataSet
+            {
+                FileName = "부하시험 샘플 데이터",
+                BaseTime = DateTime.Now.AddSeconds(-100),
+                TimeInterval = 0.1f,
+                TotalSamples = 1000
+            };
+            
+            // 부하 전류 (증가하는 패턴)
+            var loadCurrentSeries = new SeriesData
+            {
+                Name = "부하전류",
+                Unit = "A",
+                DataType = typeof(double),
+                Color = new SolidColorBrush(Colors.DarkRed),
+                IsVisible = true
+            };
+            loadCurrentSeries.Values = new float[1000];
+            for (int i = 0; i < 1000; i++)
+            {
+                loadCurrentSeries.Values[i] = (float)(5 + i * 0.02 + Math.Sin(i * 0.2) * 3);
+            }
+            loadCurrentSeries.MinValue = loadCurrentSeries.Values.Min();
+            loadCurrentSeries.MaxValue = loadCurrentSeries.Values.Max();
+            loadCurrentSeries.AvgValue = loadCurrentSeries.Values.Average();
+            
+            // 부하 전압 (감소하는 패턴)
+            var loadVoltageSeries = new SeriesData
+            {
+                Name = "부하전압",
+                Unit = "V",
+                DataType = typeof(double),
+                Color = new SolidColorBrush(Colors.DarkBlue),
+                IsVisible = true
+            };
+            loadVoltageSeries.Values = new float[1000];
+            for (int i = 0; i < 1000; i++)
+            {
+                loadVoltageSeries.Values[i] = (float)(230 - i * 0.01 + Math.Cos(i * 0.15) * 5);
+            }
+            loadVoltageSeries.MinValue = loadVoltageSeries.Values.Min();
+            loadVoltageSeries.MaxValue = loadVoltageSeries.Values.Max();
+            loadVoltageSeries.AvgValue = loadVoltageSeries.Values.Average();
+            
+            // 부하율
+            var loadRateSeries = new SeriesData
+            {
+                Name = "부하율",
+                Unit = "%",
+                DataType = typeof(double),
+                Color = new SolidColorBrush(Colors.Green),
+                IsVisible = true
+            };
+            loadRateSeries.Values = new float[1000];
+            for (int i = 0; i < 1000; i++)
+            {
+                loadRateSeries.Values[i] = (float)(50 + i * 0.03 + Math.Sin(i * 0.1) * 10);
+            }
+            loadRateSeries.MinValue = loadRateSeries.Values.Min();
+            loadRateSeries.MaxValue = loadRateSeries.Values.Max();
+            loadRateSeries.AvgValue = loadRateSeries.Values.Average();
+            
+            dataSet.SeriesData.Add(loadCurrentSeries.Name, loadCurrentSeries);
+            dataSet.SeriesData.Add(loadVoltageSeries.Name, loadVoltageSeries);
+            dataSet.SeriesData.Add(loadRateSeries.Name, loadRateSeries);
+            
+            return dataSet;
+        }
+
+        private void NoLoadTest_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                UpdateStatusBar("무부하시험 차트를 생성하고 있습니다...");
+                PerformanceLogger.Instance.LogInfo("무부하시험 모드 선택", "TestMode");
+                
+                // 무부하시험 샘플 데이터 생성
+                var sampleDataSet = CreateNoLoadTestSampleData();
+                
+                // MDI 차트 윈도우 생성
+                var chartWindow = _mdiManager.CreateChartWindow("무부하시험 - " + DateTime.Now.ToString("HH:mm:ss"), sampleDataSet);
+                
+                UpdateStatusBar($"무부하시험 차트가 생성되었습니다. (샘플 데이터: {sampleDataSet.TotalSamples}개)");
+                PerformanceLogger.Instance.LogInfo("무부하시험 차트 생성 완료", "TestMode");
+                UpdateWindowCount();
+                
+                WelcomeMessage.Visibility = Visibility.Collapsed;
+            }
+            catch (Exception ex)
+            {
+                PerformanceLogger.Instance.LogError($"무부하시험 모드 오류: {ex.Message}", "TestMode");
+                MessageBox.Show($"무부하시험 차트 생성 중 오류 발생:\n{ex.Message}", 
+                              "오류", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+        
+        private MemoryOptimizedDataSet CreateNoLoadTestSampleData()
+        {
+            var dataSet = new MemoryOptimizedDataSet
+            {
+                FileName = "무부하시험 샘플 데이터",
+                BaseTime = DateTime.Now.AddSeconds(-100),
+                TimeInterval = 0.1f,
+                TotalSamples = 1000
+            };
+            
+            // 무부하 전류 (낮고 안정적)
+            var noLoadCurrentSeries = new SeriesData
+            {
+                Name = "무부하전류",
+                Unit = "A",
+                DataType = typeof(double),
+                Color = new SolidColorBrush(Colors.LightBlue),
+                IsVisible = true
+            };
+            noLoadCurrentSeries.Values = new float[1000];
+            for (int i = 0; i < 1000; i++)
+            {
+                noLoadCurrentSeries.Values[i] = (float)(0.5 + Math.Sin(i * 0.5) * 0.1);
+            }
+            noLoadCurrentSeries.MinValue = noLoadCurrentSeries.Values.Min();
+            noLoadCurrentSeries.MaxValue = noLoadCurrentSeries.Values.Max();
+            noLoadCurrentSeries.AvgValue = noLoadCurrentSeries.Values.Average();
+            
+            // 무부하 전압 (안정적)
+            var noLoadVoltageSeries = new SeriesData
+            {
+                Name = "무부하전압",
+                Unit = "V",
+                DataType = typeof(double),
+                Color = new SolidColorBrush(Colors.SkyBlue),
+                IsVisible = true
+            };
+            noLoadVoltageSeries.Values = new float[1000];
+            for (int i = 0; i < 1000; i++)
+            {
+                noLoadVoltageSeries.Values[i] = (float)(220 + Math.Cos(i * 0.3) * 1);
+            }
+            noLoadVoltageSeries.MinValue = noLoadVoltageSeries.Values.Min();
+            noLoadVoltageSeries.MaxValue = noLoadVoltageSeries.Values.Max();
+            noLoadVoltageSeries.AvgValue = noLoadVoltageSeries.Values.Average();
+            
+            // 역률
+            var powerFactorSeries = new SeriesData
+            {
+                Name = "역률",
+                Unit = "",
+                DataType = typeof(double),
+                Color = new SolidColorBrush(Colors.Purple),
+                IsVisible = true
+            };
+            powerFactorSeries.Values = new float[1000];
+            for (int i = 0; i < 1000; i++)
+            {
+                powerFactorSeries.Values[i] = (float)(0.95 + Math.Sin(i * 0.2) * 0.03);
+            }
+            powerFactorSeries.MinValue = powerFactorSeries.Values.Min();
+            powerFactorSeries.MaxValue = powerFactorSeries.Values.Max();
+            powerFactorSeries.AvgValue = powerFactorSeries.Values.Average();
+            
+            dataSet.SeriesData.Add(noLoadCurrentSeries.Name, noLoadCurrentSeries);
+            dataSet.SeriesData.Add(noLoadVoltageSeries.Name, noLoadVoltageSeries);
+            dataSet.SeriesData.Add(powerFactorSeries.Name, powerFactorSeries);
+            
+            return dataSet;
+        }
+
+        private void Create3DSurfaceChart_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                UpdateStatusBar("3D Surface 차트를 생성하고 있습니다...");
+                PerformanceLogger.Instance.LogInfo("3D Surface 차트 생성 시작", "3DSurface");
+                
+                // 3D Surface 윈도우 생성
+                var surface3DWindow = _mdiManager.Create3DSurfaceWindow("3D Surface Chart - " + DateTime.Now.ToString("HH:mm:ss"));
+                
+                UpdateStatusBar("3D Surface 차트가 생성되었습니다.");
+                PerformanceLogger.Instance.LogInfo("3D Surface 차트 생성 완료", "3DSurface");
+                UpdateWindowCount();
+                
+                // 환영 메시지 숨기기
+                WelcomeMessage.Visibility = Visibility.Collapsed;
+            }
+            catch (Exception ex)
+            {
+                PerformanceLogger.Instance.LogError($"3D Surface 차트 생성 오류: {ex.Message}", "3DSurface");
+                MessageBox.Show($"3D Surface 차트 생성 중 오류 발생:\n{ex.Message}", 
+                              "오류", MessageBoxButton.OK, MessageBoxImage.Error);
+                UpdateStatusBar("3D Surface 차트 생성 실패");
+            }
+        }
+        
+
 
         #endregion
 
