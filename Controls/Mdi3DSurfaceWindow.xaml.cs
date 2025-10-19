@@ -1,6 +1,8 @@
 using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
+using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -68,6 +70,15 @@ namespace MGK_Analyzer.Controls
 
         #endregion
 
+        #region Public Properties
+
+        /// <summary>
+        /// 외부에서 전달받은 3D 데이터 포인트 리스트입니다.
+        /// </summary>
+        public List<Surface3DPoint> DataPoints { get; set; } = new List<Surface3DPoint>();
+
+        #endregion
+
         #region Events
 
         public event EventHandler<EventArgs>? WindowClosed;
@@ -80,9 +91,23 @@ namespace MGK_Analyzer.Controls
         #region Private Fields
 
         private bool _isResizing = false;
+        private bool _isDragging = false;
         private Point _startPoint;
-        private Size _originalSize;
+        private ResizeDirection _resizeDirection = ResizeDirection.None;
+        private double _resizeStartWidth;
+        private double _resizeStartHeight;
+        private double _resizeStartLeft;
+        private double _resizeStartTop;
         private bool _isPanelPinned = false;
+        private static int _globalZIndex = 1;  // deprecated local counter; using MdiZOrderService instead
+        
+        // 윈도우 상태 관련 필드
+        private double _normalWidth = 1000;
+        private double _normalHeight = 700;
+        private double _normalLeft = 0;
+        private double _normalTop = 0;
+        private bool _isMaximized = false;
+        private bool _isMinimized = false;
 
         #endregion
 
@@ -90,15 +115,118 @@ namespace MGK_Analyzer.Controls
         {
             InitializeComponent();
             DataContext = this;
+            // Bring to front on any mouse down inside the control
+            this.PreviewMouseDown += (_, __) => MGK_Analyzer.Services.MdiZOrderService.BringToFront(this);
             
             // Initialize SeriesList
             SeriesList = new ObservableCollection<Surface3DSeriesViewModel>();
             
-            // Initialize with sample data
-            InitializeSampleData();
+            // Loaded 이벤트 핸들러 연결
+            Loaded += Mdi3DSurfaceWindow_Loaded;
             
             // Subscribe to SeriesList changes
             SeriesList.CollectionChanged += SeriesList_CollectionChanged;
+        }
+
+        protected override void OnMouseMove(MouseEventArgs e)
+        {
+            if (_isDragging && e.LeftButton == MouseButtonState.Pressed)
+            {
+                var canvas = (Canvas?)this.Parent;
+                if (canvas == null) return;
+
+                var currentPosition = e.GetPosition(canvas);
+                var deltaX = currentPosition.X - _startPoint.X;
+                var deltaY = currentPosition.Y - _startPoint.Y;
+                
+                var newLeft = Canvas.GetLeft(this) + deltaX;
+                var newTop = Canvas.GetTop(this) + deltaY;
+                
+                // 경계 체크
+                newLeft = Math.Max(0, Math.Min(newLeft, canvas.ActualWidth - this.ActualWidth));
+                newTop = Math.Max(0, Math.Min(newTop, canvas.ActualHeight - this.ActualHeight));
+                
+                Canvas.SetLeft(this, newLeft);
+                Canvas.SetTop(this, newTop);
+                
+                _startPoint = currentPosition;
+            }
+            
+            if (_isResizing && e.LeftButton == MouseButtonState.Pressed)
+            {
+                var canvas = (Canvas?)this.Parent;
+                if (canvas == null) return;
+
+                var currentPosition = e.GetPosition(canvas);
+                PerformResize(currentPosition);
+            }
+
+            base.OnMouseMove(e);
+        }
+
+        protected override void OnMouseLeftButtonUp(MouseButtonEventArgs e)
+        {
+            if (_isDragging || _isResizing)
+            {
+                _isDragging = false;
+                _isResizing = false;
+                _resizeDirection = ResizeDirection.None;
+                this.ReleaseMouseCapture();
+            }
+            base.OnMouseLeftButtonUp(e);
+        }
+
+        private void Mdi3DSurfaceWindow_Loaded(object sender, RoutedEventArgs e)
+        {
+            // 전달받은 데이터가 있는지 확인
+            if (DataPoints != null && DataPoints.Any())
+            {
+                InitializeChartWithData();
+            }
+            else
+            {
+                // 데이터가 없으면 기본 샘플 데이터 생성
+                InitializeSampleData();
+            }
+        }
+
+        private void InitializeChartWithData()
+        {
+            try
+            {
+                // 전달받은 데이터를 Syncfusion Surface3DPoint로 변환
+                var syncfusionData = new ObservableCollection<Surface3DPoint>();
+                foreach (var point in DataPoints)
+                {
+                    syncfusionData.Add(new Surface3DPoint(point.X, point.Y, point.Z));
+                }
+                DataValues = syncfusionData;
+
+                // 데이터의 X, Y 축 고유 값 개수를 계산하여 RowSize와 ColumnSize 설정
+                var xCount = DataPoints.Select(p => p.X).Distinct().Count();
+                var yCount = DataPoints.Select(p => p.Y).Distinct().Count();
+
+                if (xCount > 1 && yCount > 1 && xCount * yCount >= DataPoints.Count)
+                {
+                    RowSize = yCount;
+                    ColumnSize = xCount;
+                }
+                else
+                {
+                    var size = (int)Math.Ceiling(Math.Sqrt(DataPoints.Count));
+                    RowSize = size;
+                    ColumnSize = size;
+                }
+
+                OnPropertyChanged(nameof(DataValues));
+                OnPropertyChanged(nameof(RowSize));
+                OnPropertyChanged(nameof(ColumnSize));
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"차트 데이터 처리 중 오류 발생: {ex.Message}", "Error",
+                               MessageBoxButton.OK, MessageBoxImage.Error);
+            }
         }
 
         #region Sample Data Initialization
@@ -170,20 +298,94 @@ namespace MGK_Analyzer.Controls
 
         private void Minimize_Click(object sender, RoutedEventArgs e)
         {
-            this.Visibility = Visibility.Collapsed;
-            WindowMinimized?.Invoke(this, EventArgs.Empty);
+            if (_isMinimized)
+            {
+                // 최소화 해제 - 이전 크기로 복원
+                RestoreNormalSize();
+            }
+            else
+            {
+                // 최소화 - 타이틀바만 보이도록 (MdiChartWindow와 동일한 높이)
+                SaveCurrentSize();
+                this.Height = 30;
+                _isMinimized = true;
+                _isMaximized = false;
+            }
         }
 
         private void Maximize_Click(object sender, RoutedEventArgs e)
         {
-            WindowMaximized?.Invoke(this, EventArgs.Empty);
+            var canvas = (Canvas?)this.Parent;
+            if (canvas == null) return;
+            
+            if (_isMaximized)
+            {
+                // 최대화 해제 - 기본 크기로 복원
+                RestoreNormalSize();
+            }
+            else
+            {
+                // 최대화
+                SaveCurrentSize();
+                this.Width = canvas.ActualWidth - 10;
+                this.Height = canvas.ActualHeight - 10;
+                Canvas.SetLeft(this, 5);
+                Canvas.SetTop(this, 5);
+                _isMaximized = true;
+                _isMinimized = false;
+            }
+        }
+        
+        private void SaveCurrentSize()
+        {
+            if (!_isMaximized && !_isMinimized)
+            {
+                _normalWidth = this.ActualWidth;
+                _normalHeight = this.ActualHeight;
+                _normalLeft = Canvas.GetLeft(this);
+                _normalTop = Canvas.GetTop(this);
+            }
+        }
+        
+        private void RestoreNormalSize()
+        {
+            this.Width = _normalWidth;
+            this.Height = _normalHeight;
+            Canvas.SetLeft(this, _normalLeft);
+            Canvas.SetTop(this, _normalTop);
+            _isMaximized = false;
+            _isMinimized = false;
         }
 
         private void TitleBar_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
         {
+            // 버튼 클릭인지 확인 (버튼이면 드래그하지 않음)
+            var element = e.OriginalSource as FrameworkElement;
+            while (element != null)
+            {
+                if (element is Button)
+                {
+                    // 버튼 클릭이면 드래그 처리하지 않음
+                    return;
+                }
+                element = element.Parent as FrameworkElement;
+            }
+
             if (e.ClickCount == 2)
             {
                 Maximize_Click(sender, e);
+            }
+            else
+            {
+                if (Parent is Canvas canvas)
+                {
+                    // Bring to front
+                    MGK_Analyzer.Services.MdiZOrderService.BringToFront(this);
+                    _startPoint = e.GetPosition(canvas);
+                    _isDragging = true;
+                    this.CaptureMouse();
+                    e.Handled = true;
+                }
             }
         }
 
@@ -191,49 +393,109 @@ namespace MGK_Analyzer.Controls
 
         #region Size Management
 
-        private void SetSmallSize_Click(object sender, RoutedEventArgs e)
-        {
-            Width = 400;
-            Height = 300;
-        }
-
-        private void SetMediumSize_Click(object sender, RoutedEventArgs e)
-        {
-            Width = 800;
-            Height = 600;
-        }
-
-        private void SetLargeSize_Click(object sender, RoutedEventArgs e)
-        {
-            Width = 1200;
-            Height = 800;
-        }
-
-        private void SetHDSize_Click(object sender, RoutedEventArgs e)
-        {
-            Width = 1920;
-            Height = 1080;
-        }
-
-        private void ShowCustomSizeDialog_Click(object sender, RoutedEventArgs e)
-        {
-            // Custom size dialog - to be implemented
-        }
-
         private void ApplySize_Click(object sender, RoutedEventArgs e)
         {
-            if (double.TryParse(WidthTextBox.Text, out double width) && 
-                double.TryParse(HeightTextBox.Text, out double height))
+            try
             {
-                Width = width;
-                Height = height;
+                if (double.TryParse(WidthTextBox.Text, out double width) && 
+                    double.TryParse(HeightTextBox.Text, out double height))
+                {
+                    SetWindowSize(width, height);
+                }
+                else
+                {
+                    MessageBox.Show("올바른 숫자를 입력해주세요.", "크기 설정", MessageBoxButton.OK, MessageBoxImage.Warning);
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"크기 설정 중 오류가 발생했습니다: {ex.Message}", "오류", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 
         private void ResetSize_Click(object sender, RoutedEventArgs e)
         {
-            Width = 800;
-            Height = 600;
+            SetWindowSize(800, 600);
+        }
+
+        private void SetSmallSize_Click(object sender, RoutedEventArgs e)
+        {
+            SetWindowSize(400, 300);
+        }
+
+        private void SetMediumSize_Click(object sender, RoutedEventArgs e)
+        {
+            SetWindowSize(800, 600);
+        }
+
+        private void SetLargeSize_Click(object sender, RoutedEventArgs e)
+        {
+            SetWindowSize(1200, 800);
+        }
+
+        private void SetHDSize_Click(object sender, RoutedEventArgs e)
+        {
+            var canvas = (Canvas)this.Parent;
+            if (canvas != null)
+            {
+                // 캔버스 크기를 고려하여 적절히 조절
+                var maxWidth = Math.Min(1920, canvas.ActualWidth - 50);
+                var maxHeight = Math.Min(1080, canvas.ActualHeight - 50);
+                SetWindowSize(maxWidth, maxHeight);
+            }
+            else
+            {
+                SetWindowSize(1200, 800); // 캔버스가 없으면 기본 크기
+            }
+        }
+
+        private void ShowCustomSizeDialog_Click(object sender, RoutedEventArgs e)
+        {
+            var dialog = new CustomSizeDialog(this.ActualWidth, this.ActualHeight)
+            {
+                Owner = Window.GetWindow(this)
+            };
+
+            if (dialog.ShowDialog() == true)
+            {
+                SetWindowSize(dialog.SelectedWidth, dialog.SelectedHeight);
+            }
+        }
+
+        private void SetWindowSize(double width, double height)
+        {
+            var canvas = (Canvas)this.Parent;
+            if (canvas == null) return;
+
+            // 최소/최대 크기 제한
+            const double minWidth = 300;
+            const double minHeight = 200;
+            
+            width = Math.Max(minWidth, Math.Min(width, canvas.ActualWidth - 20));
+            height = Math.Max(minHeight, Math.Min(height, canvas.ActualHeight - 20));
+
+            // 현재 위치가 새 크기에서 캔버스를 벗어나지 않도록 조정
+            var currentLeft = Canvas.GetLeft(this);
+            var currentTop = Canvas.GetTop(this);
+            
+            if (currentLeft + width > canvas.ActualWidth)
+            {
+                currentLeft = Math.Max(0, canvas.ActualWidth - width);
+                Canvas.SetLeft(this, currentLeft);
+            }
+            
+            if (currentTop + height > canvas.ActualHeight)
+            {
+                currentTop = Math.Max(0, canvas.ActualHeight - height);
+                Canvas.SetTop(this, currentTop);
+            }
+
+            this.Width = width;
+            this.Height = height;
+            
+            // 최대화 상태 해제
+            _isMaximized = false;
+            _isMinimized = false;
         }
 
         #endregion
@@ -312,107 +574,164 @@ namespace MGK_Analyzer.Controls
 
         private void ResizeTop_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
         {
-            StartResize(sender, e, "Top");
+            StartResize(ResizeDirection.Top, e.GetPosition(Parent as Canvas));
+            e.Handled = true;
         }
 
         private void ResizeBottom_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
         {
-            StartResize(sender, e, "Bottom");
+            StartResize(ResizeDirection.Bottom, e.GetPosition(Parent as Canvas));
+            e.Handled = true;
         }
 
         private void ResizeLeft_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
         {
-            StartResize(sender, e, "Left");
+            StartResize(ResizeDirection.Left, e.GetPosition(Parent as Canvas));
+            e.Handled = true;
         }
 
         private void ResizeRight_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
         {
-            StartResize(sender, e, "Right");
+            StartResize(ResizeDirection.Right, e.GetPosition(Parent as Canvas));
+            e.Handled = true;
         }
 
         private void ResizeTopLeft_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
         {
-            StartResize(sender, e, "TopLeft");
+            StartResize(ResizeDirection.TopLeft, e.GetPosition(Parent as Canvas));
+            e.Handled = true;
         }
 
         private void ResizeTopRight_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
         {
-            StartResize(sender, e, "TopRight");
+            StartResize(ResizeDirection.TopRight, e.GetPosition(Parent as Canvas));
+            e.Handled = true;
         }
 
         private void ResizeBottomLeft_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
         {
-            StartResize(sender, e, "BottomLeft");
+            StartResize(ResizeDirection.BottomLeft, e.GetPosition(Parent as Canvas));
+            e.Handled = true;
         }
 
         private void ResizeBottomRight_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
         {
-            StartResize(sender, e, "BottomRight");
+            StartResize(ResizeDirection.BottomRight, e.GetPosition(Parent as Canvas));
+            e.Handled = true;
         }
 
-        private void StartResize(object sender, MouseButtonEventArgs e, string direction)
+        private void StartResize(ResizeDirection direction, Point startPosition)
         {
+            var canvas = Parent as Canvas;
+            if (canvas == null) return;
+
             _isResizing = true;
-            _startPoint = e.GetPosition(this);
-            _originalSize = new Size(ActualWidth, ActualHeight);
+            _resizeDirection = direction;
+            _startPoint = startPosition;
+            _resizeStartWidth = this.ActualWidth;
+            _resizeStartHeight = this.ActualHeight;
+            _resizeStartLeft = Canvas.GetLeft(this);
+            _resizeStartTop = Canvas.GetTop(this);
+            this.CaptureMouse();
             
-            FrameworkElement element = (FrameworkElement)sender;
-            element.CaptureMouse();
-            element.MouseMove += (s, args) => HandleResize(args, direction);
-            element.MouseLeftButtonUp += (s, args) => StopResize(element);
+            // 활성 윈도우로 설정 (bring to front)
+            MGK_Analyzer.Services.MdiZOrderService.BringToFront(this);
         }
 
-        private void HandleResize(MouseEventArgs e, string direction)
+        private void PerformResize(Point currentPosition)
         {
-            if (!_isResizing) return;
+            var canvas = (Canvas?)this.Parent;
+            if (canvas == null) return;
 
-            Point currentPoint = e.GetPosition(this);
-            double deltaX = currentPoint.X - _startPoint.X;
-            double deltaY = currentPoint.Y - _startPoint.Y;
+            var deltaX = currentPosition.X - _startPoint.X;
+            var deltaY = currentPosition.Y - _startPoint.Y;
 
-            double newWidth = _originalSize.Width;
-            double newHeight = _originalSize.Height;
+            var newWidth = _resizeStartWidth;
+            var newHeight = _resizeStartHeight;
+            var newLeft = _resizeStartLeft;
+            var newTop = _resizeStartTop;
 
-            switch (direction)
+            // 최소 크기 설정 (MdiChartWindow와 동일)
+            const double minWidth = 300;
+            const double minHeight = 200;
+
+            switch (_resizeDirection)
             {
-                case "Right":
-                    newWidth = Math.Max(200, _originalSize.Width + deltaX);
+                case ResizeDirection.Right:
+                    newWidth = Math.Max(minWidth, _resizeStartWidth + deltaX);
                     break;
-                case "Left":
-                    newWidth = Math.Max(200, _originalSize.Width - deltaX);
+
+                case ResizeDirection.Bottom:
+                    newHeight = Math.Max(minHeight, _resizeStartHeight + deltaY);
                     break;
-                case "Bottom":
-                    newHeight = Math.Max(150, _originalSize.Height + deltaY);
+
+                case ResizeDirection.Left:
+                    var newWidthLeft = Math.Max(minWidth, _resizeStartWidth - deltaX);
+                    if (newWidthLeft >= minWidth)
+                    {
+                        newWidth = newWidthLeft;
+                        newLeft = _resizeStartLeft + deltaX;
+                    }
                     break;
-                case "Top":
-                    newHeight = Math.Max(150, _originalSize.Height - deltaY);
+
+                case ResizeDirection.Top:
+                    var newHeightTop = Math.Max(minHeight, _resizeStartHeight - deltaY);
+                    if (newHeightTop >= minHeight)
+                    {
+                        newHeight = newHeightTop;
+                        newTop = _resizeStartTop + deltaY;
+                    }
                     break;
-                case "BottomRight":
-                    newWidth = Math.Max(200, _originalSize.Width + deltaX);
-                    newHeight = Math.Max(150, _originalSize.Height + deltaY);
+
+                case ResizeDirection.TopLeft:
+                    var newWidthTL = Math.Max(minWidth, _resizeStartWidth - deltaX);
+                    var newHeightTL = Math.Max(minHeight, _resizeStartHeight - deltaY);
+                    if (newWidthTL >= minWidth && newHeightTL >= minHeight)
+                    {
+                        newWidth = newWidthTL;
+                        newHeight = newHeightTL;
+                        newLeft = _resizeStartLeft + deltaX;
+                        newTop = _resizeStartTop + deltaY;
+                    }
                     break;
-                case "TopLeft":
-                    newWidth = Math.Max(200, _originalSize.Width - deltaX);
-                    newHeight = Math.Max(150, _originalSize.Height - deltaY);
+
+                case ResizeDirection.TopRight:
+                    var newWidthTR = Math.Max(minWidth, _resizeStartWidth + deltaX);
+                    var newHeightTR = Math.Max(minHeight, _resizeStartHeight - deltaY);
+                    if (newWidthTR >= minWidth && newHeightTR >= minHeight)
+                    {
+                        newWidth = newWidthTR;
+                        newHeight = newHeightTR;
+                        newTop = _resizeStartTop + deltaY;
+                    }
                     break;
-                case "TopRight":
-                    newWidth = Math.Max(200, _originalSize.Width + deltaX);
-                    newHeight = Math.Max(150, _originalSize.Height - deltaY);
+
+                case ResizeDirection.BottomLeft:
+                    var newWidthBL = Math.Max(minWidth, _resizeStartWidth - deltaX);
+                    var newHeightBL = Math.Max(minHeight, _resizeStartHeight + deltaY);
+                    if (newWidthBL >= minWidth && newHeightBL >= minHeight)
+                    {
+                        newWidth = newWidthBL;
+                        newHeight = newHeightBL;
+                        newLeft = _resizeStartLeft + deltaX;
+                    }
                     break;
-                case "BottomLeft":
-                    newWidth = Math.Max(200, _originalSize.Width - deltaX);
-                    newHeight = Math.Max(150, _originalSize.Height + deltaY);
+
+                case ResizeDirection.BottomRight:
+                    newWidth = Math.Max(minWidth, _resizeStartWidth + deltaX);
+                    newHeight = Math.Max(minHeight, _resizeStartHeight + deltaY);
                     break;
             }
 
-            Width = newWidth;
-            Height = newHeight;
-        }
-
-        private void StopResize(FrameworkElement? element)
-        {
-            _isResizing = false;
-            element?.ReleaseMouseCapture();
+            // 캔버스 경계 체크
+            if (newLeft >= 0 && newLeft + newWidth <= canvas.ActualWidth &&
+                newTop >= 0 && newTop + newHeight <= canvas.ActualHeight)
+            {
+                this.Width = newWidth;
+                this.Height = newHeight;
+                Canvas.SetLeft(this, newLeft);
+                Canvas.SetTop(this, newTop);
+            }
         }
 
         #endregion

@@ -16,25 +16,12 @@ using Syncfusion.UI.Xaml.Charts;
 
 namespace MGK_Analyzer.Controls
 {
-    public enum ResizeDirection
-    {
-        None,
-        Top,
-        Bottom,
-        Left,
-        Right,
-        TopLeft,
-        TopRight,
-        BottomLeft,
-        BottomRight
-    }
-
     public partial class MdiChartWindow : UserControl, INotifyPropertyChanged
     {
         private bool _isDragging = false;
         private bool _isResizing = false;
         private Point _lastPosition;
-        private static int _globalZIndex = 1;
+        private static int _globalZIndex = 1; // deprecated local counter; retained to avoid widespread edits
         private MemoryOptimizedDataSet? _dataSet;
         private bool _isManagementPanelExpanded = true;
         private bool _isManagementPanelPinned = false;
@@ -89,6 +76,8 @@ namespace MGK_Analyzer.Controls
         {
             InitializeComponent();
             DataContext = this;
+            // Bring to front on any mouse down inside the control
+            this.PreviewMouseDown += (_, __) => MGK_Analyzer.Services.MdiZOrderService.BringToFront(this);
             
             // 초기 상태: 패널 표시
             _isManagementPanelExpanded = true;
@@ -493,14 +482,34 @@ namespace MGK_Analyzer.Controls
         // 타이틀바 드래그
         private void TitleBar_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
         {
-            _isDragging = true;
-            var canvas = (Canvas)this.Parent;
-            _lastPosition = e.GetPosition(canvas);
-            this.CaptureMouse();
-            
-            // 활성 윈도우로 설정
-            Canvas.SetZIndex(this, ++_globalZIndex);
-            WindowActivated?.Invoke(this, EventArgs.Empty);
+            // 버튼 클릭인지 확인 (버튼이면 드래그하지 않음)
+            var element = e.OriginalSource as FrameworkElement;
+            while (element != null)
+            {
+                if (element is Button)
+                {
+                    // 버튼 클릭이면 드래그 처리하지 않음
+                    return;
+                }
+                element = element.Parent as FrameworkElement;
+            }
+
+            if (e.ClickCount == 2)
+            {
+                // 더블클릭 시 최대화/복원
+                Maximize_Click(sender, e);
+            }
+            else
+            {
+                _isDragging = true;
+                var canvas = (Canvas)this.Parent;
+                _lastPosition = e.GetPosition(canvas);
+                this.CaptureMouse();
+                
+                // 활성 윈도우로 설정 (bring to front)
+                MGK_Analyzer.Services.MdiZOrderService.BringToFront(this);
+                WindowActivated?.Invoke(this, EventArgs.Empty);
+            }
         }
 
         protected override void OnMouseMove(MouseEventArgs e)
@@ -659,8 +668,8 @@ namespace MGK_Analyzer.Controls
             _resizeStartTop = Canvas.GetTop(this);
             this.CaptureMouse();
             
-            // 활성 윈도우로 설정
-            Canvas.SetZIndex(this, ++_globalZIndex);
+            // 활성 윈도우로 설정 (bring to front)
+            MGK_Analyzer.Services.MdiZOrderService.BringToFront(this);
             WindowActivated?.Invoke(this, EventArgs.Empty);
         }
 

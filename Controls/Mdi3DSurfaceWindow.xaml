@@ -380,58 +380,60 @@
             <Rectangle Height="5" Fill="Transparent" 
                       HorizontalAlignment="Stretch" VerticalAlignment="Top"
                       Cursor="SizeNS" MouseLeftButtonDown="ResizeTop_MouseLeftButtonDown"
-                      Margin="5,0,5,0" ToolTip="Drag top edge to resize height"/>
+                      Margin="5,0,5,0" ToolTip="Drag top edge to resize height"
+                      Grid.RowSpan="2" Panel.ZIndex="1000"/>
             
             <!-- Bottom Edge -->
             <Rectangle Height="5" Fill="Transparent" 
                       HorizontalAlignment="Stretch" VerticalAlignment="Bottom"
                       Cursor="SizeNS" MouseLeftButtonDown="ResizeBottom_MouseLeftButtonDown"
-                      Margin="5,0,5,0" ToolTip="Drag bottom edge to resize height"/>
+                      Margin="5,0,5,0" ToolTip="Drag bottom edge to resize height"
+                      Grid.RowSpan="2" Panel.ZIndex="1000"/>
             
             <!-- Left Edge -->
             <Rectangle Width="5" Fill="Transparent" 
                       HorizontalAlignment="Left" VerticalAlignment="Stretch"
                       Cursor="SizeWE" MouseLeftButtonDown="ResizeLeft_MouseLeftButtonDown"
-                      Margin="0,5,0,5" ToolTip="Drag left edge to resize width"/>
+                      Margin="0,5,0,5" ToolTip="Drag left edge to resize width"
+                      Grid.RowSpan="2" Panel.ZIndex="1000"/>
             
             <!-- Right Edge -->
             <Rectangle Width="5" Fill="Transparent" 
                       HorizontalAlignment="Right" VerticalAlignment="Stretch"
                       Cursor="SizeWE" MouseLeftButtonDown="ResizeRight_MouseLeftButtonDown"
-                      Margin="0,5,0,5" ToolTip="Drag right edge to resize width"/>
+                      Margin="0,5,0,5" ToolTip="Drag right edge to resize width"
+                      Grid.RowSpan="2" Panel.ZIndex="1000"/>
             
             <!-- Corner Handles -->
-            <!-- Top-Left Corner -->
-            <Rectangle Width="10" Height="10" Fill="DarkGray" 
+            <!-- Top-Left Corner (invisible) -->
+            <Rectangle Width="10" Height="10" Fill="Transparent" 
                       HorizontalAlignment="Left" VerticalAlignment="Top"
                       Cursor="SizeNWSE" MouseLeftButtonDown="ResizeTopLeft_MouseLeftButtonDown"
-                      Margin="0,0,0,0" ToolTip="Drag corner to resize"/>
+                      Margin="0,0,0,0" ToolTip="Drag corner to resize"
+                      Grid.RowSpan="2" Panel.ZIndex="1000"/>
             
-            <!-- Top-Right Corner -->
-            <Rectangle Width="10" Height="10" Fill="DarkGray" 
+            <!-- Top-Right Corner (invisible) -->
+            <Rectangle Width="10" Height="10" Fill="Transparent" 
                       HorizontalAlignment="Right" VerticalAlignment="Top"
                       Cursor="SizeNESW" MouseLeftButtonDown="ResizeTopRight_MouseLeftButtonDown"
-                      Margin="0,0,0,0" ToolTip="Drag corner to resize"/>
+                      Margin="0,0,0,0" ToolTip="Drag corner to resize"
+                      Grid.RowSpan="2" Panel.ZIndex="1000"/>
             
-            <!-- Bottom-Left Corner -->
-            <Rectangle Width="10" Height="10" Fill="DarkGray" 
+            <!-- Bottom-Left Corner (invisible) -->
+            <Rectangle Width="10" Height="10" Fill="Transparent" 
                       HorizontalAlignment="Left" VerticalAlignment="Bottom"
                       Cursor="SizeNESW" MouseLeftButtonDown="ResizeBottomLeft_MouseLeftButtonDown"
-                      Margin="0,0,0,0" ToolTip="Drag corner to resize"/>
+                      Margin="0,0,0,0" ToolTip="Drag corner to resize"
+                      Grid.RowSpan="2" Panel.ZIndex="1000"/>
             
-            <!-- Bottom-Right Corner -->
-            <Rectangle Width="15" Height="15" Fill="Gray" 
+            <!-- Bottom-Right Corner (invisible) -->
+            <Rectangle Width="15" Height="15" Fill="Transparent" 
                       HorizontalAlignment="Right" VerticalAlignment="Bottom"
                       Cursor="SizeNWSE" MouseLeftButtonDown="ResizeBottomRight_MouseLeftButtonDown"
-                      Margin="0,0,0,0" ToolTip="Drag corner to resize"/>
+                      Margin="0,0,0,0" ToolTip="Drag corner to resize"
+                      Grid.RowSpan="2" Panel.ZIndex="1000"/>
             
-            <!-- Resize Indicator (bottom-right corner indicator) -->
-            <Path Data="M 0,10 L 10,10 L 10,0" Stroke="White" StrokeThickness="1"
-                  HorizontalAlignment="Right" VerticalAlignment="Bottom"
-                  Margin="0,0,8,8" IsHitTestVisible="False"/>
-            <Path Data="M 3,10 L 10,10 L 10,3" Stroke="White" StrokeThickness="1"
-                  HorizontalAlignment="Right" VerticalAlignment="Bottom"
-                  Margin="0,0,5,5" IsHitTestVisible="False"/>
+            <!-- Removed visual corner indicator paths for cleaner UI -->
         </Grid>
     </Border>
 </UserControl>

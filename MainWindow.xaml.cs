@@ -13,8 +13,10 @@ using MGK_Analyzer.Services;
 using MGK_Analyzer.Views;
 using MGK_Analyzer.Models;
 using MGK_Analyzer.Utils;
+using MGK_Analyzer.Windows;
 using Microsoft.Win32;
 using System.IO;
+using MGK_Analyzer.Controls;
 
 namespace MGK_Analyzer
 {
@@ -26,9 +28,10 @@ namespace MGK_Analyzer
         private AppSettings _settings;
         private bool _isFileExplorerExpanded = false;
         private bool _isFileExplorerPinned = false;
-        private MdiWindowManager? _mdiManager;
         private CsvDataLoader _csvLoader;
         private LogViewerWindow? _logViewerWindow;
+        private int _chartWindowCount = 0;
+        private MdiWindowManager? _mdiWindowManager;
 
         public MainWindow()
         {
@@ -52,20 +55,20 @@ namespace MGK_Analyzer
             
             UpdateStatusBar("MGK Analyzer가 시작되었습니다.");
             
-            // MDI 매니저 초기화
-            _mdiManager = new MdiWindowManager(MdiCanvas);
-            
             // 저장된 테마 적용
             ThemeManager.Instance.InitializeTheme();
             
             // 파일 탐색기 초기화
             InitializeFileExplorer();
             
+            // MDI 매니저 초기화
+            _mdiWindowManager = new MdiWindowManager(MdiCanvas);
+            
             // 현재 테마 상태 표시
             var currentTheme = ThemeManager.Instance.GetThemeDisplayName(ThemeManager.Instance.CurrentTheme);
             UpdateStatusBar($"MGK Analyzer가 시작되었습니다. 현재 테마: {currentTheme}");
             
-            // MDI 창 개수 업데이트
+            // 윈도우 개수 업데이트
             UpdateWindowCount();
             
             PerformanceLogger.Instance.LogInfo("MainWindow 초기화 완료", "Application");
@@ -388,6 +391,11 @@ namespace MGK_Analyzer
 
         private async void ImportData_Click(object sender, RoutedEventArgs e)
         {
+            if (_mdiWindowManager == null)
+            {
+                UpdateStatusBar("MDI 초기화가 완료되지 않았습니다.");
+                return;
+            }
             var openFileDialog = new OpenFileDialog
             {
                 Title = "CSV 데이터 파일 선택",
@@ -448,11 +456,13 @@ namespace MGK_Analyzer
                         dataSet = await _csvLoader.LoadCsvDataAsync(openFileDialog.FileName, progress);
                     }
 
-                    // MDI 차트 윈도우 생성
+                    // 차트 윈도우 생성
                     using (var chartTimer = PerformanceLogger.Instance.StartTimer("차트 윈도우 생성", "Data_Import"))
                     {
-                        var chartWindow = _mdiManager.CreateChartWindow(dataSet.FileName, dataSet);
-                        PerformanceLogger.Instance.LogInfo($"차트 윈도우 생성 완료: {dataSet.FileName}", "Data_Import");
+                        var mdi = _mdiWindowManager.CreateChartWindow(dataSet.FileName, dataSet);
+                        mdi.WindowClosed += (s, args) => UpdateWindowCount();
+                        _chartWindowCount = _mdiWindowManager.WindowCount;
+                        PerformanceLogger.Instance.LogInfo($"MDI 차트 윈도우 생성 완료: {dataSet.FileName}", "Data_Import");
                     }
 
                     var loadMessage = fileSizeMB > 5
@@ -587,14 +597,20 @@ namespace MGK_Analyzer
         {
             try
             {
+                if (_mdiWindowManager == null)
+                {
+                    UpdateStatusBar("MDI 초기화가 완료되지 않았습니다.");
+                    return;
+                }
                 UpdateStatusBar("일반시험 차트를 생성하고 있습니다...");
                 PerformanceLogger.Instance.LogInfo("일반시험 모드 선택", "TestMode");
                 
                 // 샘플 차트 데이터 생성
                 var sampleDataSet = CreateStandardTestSampleData();
                 
-                // MDI 차트 윈도우 생성
-                var chartWindow = _mdiManager.CreateChartWindow("일반시험 - " + DateTime.Now.ToString("HH:mm:ss"), sampleDataSet);
+                // 차트 윈도우 생성
+                var mdi = _mdiWindowManager.CreateChartWindow("일반시험 - " + DateTime.Now.ToString("HH:mm:ss"), sampleDataSet);
+                mdi.WindowClosed += (s, args) => UpdateWindowCount();
                 
                 UpdateStatusBar($"일반시험 차트가 생성되었습니다. (샘플 데이터: {sampleDataSet.TotalSamples}개)");
                 PerformanceLogger.Instance.LogInfo("일반시험 차트 생성 완료", "TestMode");
@@ -686,14 +702,20 @@ namespace MGK_Analyzer
         {
             try
             {
+                if (_mdiWindowManager == null)
+                {
+                    UpdateStatusBar("MDI 초기화가 완료되지 않았습니다.");
+                    return;
+                }
                 UpdateStatusBar("부하시험 차트를 생성하고 있습니다...");
                 PerformanceLogger.Instance.LogInfo("부하시험 모드 선택", "TestMode");
                 
                 // 부하시험 샘플 데이터 생성
                 var sampleDataSet = CreateLoadTestSampleData();
                 
-                // MDI 차트 윈도우 생성
-                var chartWindow = _mdiManager.CreateChartWindow("부하시험 - " + DateTime.Now.ToString("HH:mm:ss"), sampleDataSet);
+                // 차트 윈도우 생성
+                var mdi = _mdiWindowManager.CreateChartWindow("부하시험 - " + DateTime.Now.ToString("HH:mm:ss"), sampleDataSet);
+                mdi.WindowClosed += (s, args) => UpdateWindowCount();
                 
                 UpdateStatusBar($"부하시험 차트가 생성되었습니다. (샘플 데이터: {sampleDataSet.TotalSamples}개)");
                 PerformanceLogger.Instance.LogInfo("부하시험 차트 생성 완료", "TestMode");
@@ -784,14 +806,20 @@ namespace MGK_Analyzer
         {
             try
             {
+                if (_mdiWindowManager == null)
+                {
+                    UpdateStatusBar("MDI 초기화가 완료되지 않았습니다.");
+                    return;
+                }
                 UpdateStatusBar("무부하시험 차트를 생성하고 있습니다...");
                 PerformanceLogger.Instance.LogInfo("무부하시험 모드 선택", "TestMode");
                 
                 // 무부하시험 샘플 데이터 생성
                 var sampleDataSet = CreateNoLoadTestSampleData();
                 
-                // MDI 차트 윈도우 생성
-                var chartWindow = _mdiManager.CreateChartWindow("무부하시험 - " + DateTime.Now.ToString("HH:mm:ss"), sampleDataSet);
+                // 차트 윈도우 생성
+                var mdi = _mdiWindowManager.CreateChartWindow("무부하시험 - " + DateTime.Now.ToString("HH:mm:ss"), sampleDataSet);
+                mdi.WindowClosed += (s, args) => UpdateWindowCount();
                 
                 UpdateStatusBar($"무부하시험 차트가 생성되었습니다. (샘플 데이터: {sampleDataSet.TotalSamples}개)");
                 PerformanceLogger.Instance.LogInfo("무부하시험 차트 생성 완료", "TestMode");
@@ -882,11 +910,20 @@ namespace MGK_Analyzer
         {
             try
             {
+                if (_mdiWindowManager == null)
+                {
+                    UpdateStatusBar("MDI 초기화가 완료되지 않았습니다.");
+                    return;
+                }
                 UpdateStatusBar("3D Surface 차트를 생성하고 있습니다...");
                 PerformanceLogger.Instance.LogInfo("3D Surface 차트 생성 시작", "3DSurface");
                 
-                // 3D Surface 윈도우 생성
-                var surface3DWindow = _mdiManager.Create3DSurfaceWindow("3D Surface Chart - " + DateTime.Now.ToString("HH:mm:ss"));
+                // 샘플 데이터 생성
+                var sampleData = SampleDataGenerator.CreateSample3DData();
+                
+                // 3D Surface MDI 윈도우 생성
+                var mdi = _mdiWindowManager.Create3DSurfaceWindow("3D Surface Chart - " + DateTime.Now.ToString("HH:mm:ss"), sampleData);
+                mdi.WindowClosed += (s, args) => UpdateWindowCount();
                 
                 UpdateStatusBar("3D Surface 차트가 생성되었습니다.");
                 PerformanceLogger.Instance.LogInfo("3D Surface 차트 생성 완료", "3DSurface");
@@ -903,49 +940,95 @@ namespace MGK_Analyzer
                 UpdateStatusBar("3D Surface 차트 생성 실패");
             }
         }
+
+        private void CreateContourChart_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                if (_mdiWindowManager == null)
+                {
+                    UpdateStatusBar("MDI 초기화가 완료되지 않았습니다.");
+                    return;
+                }
+                UpdateStatusBar("Contour 차트를 생성하고 있습니다...");
+                PerformanceLogger.Instance.LogInfo("Contour 차트 생성 시작", "Contour");
+                
+                // 3D Surface와 동일한 샘플 데이터 사용
+                var sampleData = SampleDataGenerator.CreateSample3DData();
+                
+                // Contour MDI 윈도우 생성
+                var mdi = _mdiWindowManager.CreateContourWindow("Contour Chart - " + DateTime.Now.ToString("HH:mm:ss"), sampleData);
+                mdi.WindowClosed += (s, args) => UpdateWindowCount();
+                
+                UpdateStatusBar("Contour 차트가 생성되었습니다.");
+                PerformanceLogger.Instance.LogInfo("Contour 차트 생성 완료", "Contour");
+                UpdateWindowCount();
+                
+                // 환영 메시지 숨기기
+                WelcomeMessage.Visibility = Visibility.Collapsed;
+            }
+            catch (Exception ex)
+            {
+                PerformanceLogger.Instance.LogError($"Contour 차트 생성 오류: {ex.Message}", "Contour");
+                MessageBox.Show($"Contour 차트 생성 중 오류 발생:\n{ex.Message}", 
+                              "오류", MessageBoxButton.OK, MessageBoxImage.Error);
+                UpdateStatusBar("Contour 차트 생성 실패");
+            }
+        }
         
 
 
         #endregion
 
-        #region MDI 윈도우 관리
+        #region 윈도우 관리
 
         private void CascadeWindows_Click(object sender, RoutedEventArgs e)
         {
-            _mdiManager?.CascadeWindows();
-            UpdateStatusBar("윈도우를 계단식으로 정렬했습니다.");
+            if (_mdiWindowManager == null) return;
+            _mdiWindowManager.CascadeWindows();
+            UpdateStatusBar("윈도우를 계단식으로 배치했습니다.");
         }
 
         private void TileWindows_Click(object sender, RoutedEventArgs e)
         {
-            _mdiManager?.TileWindows();
-            UpdateStatusBar("윈도우를 타일式으로 정렬했습니다.");
+            if (_mdiWindowManager == null) return;
+            _mdiWindowManager.TileWindows();
+            UpdateStatusBar("윈도우를 타일로 배치했습니다.");
         }
 
         private void MinimizeAll_Click(object sender, RoutedEventArgs e)
         {
-            _mdiManager?.MinimizeAll();
+            if (_mdiWindowManager == null) return;
+            _mdiWindowManager.MinimizeAll();
             UpdateStatusBar("모든 윈도우를 최소화했습니다.");
         }
 
         private void UpdateWindowCount()
         {
-            if (WindowCountText != null && _mdiManager != null)
+            if (WindowCountText == null) return;
+            if (_mdiWindowManager != null)
             {
-                WindowCountText.Text = $"Windows: {_mdiManager.WindowCount}";
-                
-                // 윈도우가 없으면 환영 메시지 표시
-                if (WelcomeMessage != null)
+                _chartWindowCount = _mdiWindowManager.WindowCount;
+            }
+            else
+            {
+                // fallback: Canvas의 자식 컨트롤 카운트
+                _chartWindowCount = 0;
+                if (MdiCanvas != null)
                 {
-                    if (_mdiManager.WindowCount == 0)
+                    foreach (var child in MdiCanvas.Children)
                     {
-                        WelcomeMessage.Visibility = Visibility.Visible;
-                    }
-                    else
-                    {
-                        WelcomeMessage.Visibility = Visibility.Collapsed;
+                        if (child is MdiChartWindow || child is Mdi3DSurfaceWindow || child is MdiContourWindow)
+                            _chartWindowCount++;
                     }
                 }
+            }
+
+            WindowCountText.Text = $"Windows: {_chartWindowCount}";
+
+            if (WelcomeMessage != null)
+            {
+                WelcomeMessage.Visibility = _chartWindowCount == 0 ? Visibility.Visible : Visibility.Collapsed;
             }
         }
 

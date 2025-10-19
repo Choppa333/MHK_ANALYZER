@@ -91,6 +91,11 @@
                         <Path Data="{StaticResource ChartIcon}" Style="{StaticResource MenuIconStyle}" Fill="DarkBlue"/>
                     </MenuItem.Icon>
                 </MenuItem>
+                <MenuItem Header="Contour 차트(_C)" Click="CreateContourChart_Click">
+                    <MenuItem.Icon>
+                        <Path Data="{StaticResource ChartIcon}" Style="{StaticResource MenuIconStyle}" Fill="DarkCyan"/>
+                    </MenuItem.Icon>
+                </MenuItem>
             </MenuItem>
 
             <MenuItem Header="프로젝트(_P)" x:Name="ProjectMenu">
@@ -196,6 +201,13 @@
                 <StackPanel Orientation="Horizontal">
                     <Path Data="{StaticResource ChartIcon}" Style="{StaticResource ToolbarIconStyle}" Fill="DarkBlue"/>
                     <TextBlock Text="3D Surface" Margin="5,0" VerticalAlignment="Center"/>
+                </StackPanel>
+            </Button>
+            
+            <Button x:Name="ContourButton" Click="CreateContourChart_Click" ToolTip="Contour 차트 (등고선)">
+                <StackPanel Orientation="Horizontal">
+                    <Path Data="{StaticResource ChartIcon}" Style="{StaticResource ToolbarIconStyle}" Fill="DarkCyan"/>
+                    <TextBlock Text="Contour" Margin="5,0" VerticalAlignment="Center"/>
                 </StackPanel>
             </Button>
             
@@ -364,22 +376,24 @@
                           ResizeBehavior="PreviousAndCurrent"
                           ResizeDirection="Columns"/>
 
-            <!-- 메인 컨텐츠 영역 -->
-            <Grid Grid.Column="2" Background="LightGray">
-                <Canvas x:Name="MdiCanvas" ClipToBounds="True" Background="Yellow">
-                    <!-- 차트 윈도우들이 동적으로 추가됨 -->
+            <!-- 메인 컨텐츠 영역 - MDI Container -->
+            <Grid Grid.Column="2" Background="WhiteSmoke">
+                <!-- MDI Canvas for Child Windows -->
+                <Canvas x:Name="MdiCanvas" Background="White" ClipToBounds="True">
+                    <!-- Child windows will be added here dynamically -->
                 </Canvas>
-                
-                <!-- MDI controls moved to toolbar -->
                 
                 <!-- 환영 메시지 (윈도우가 없을 때만 표시) -->
                 <TextBlock x:Name="WelcomeMessage" 
-                           Text="데이터 → 데이터 가져오기를 선택하여 CSV 파일을 로드하세요" 
+                           Text="데이터 → 데이터 가져오기를 선택하여 CSV 파일을 로드하거나&#x0a;툴바의 버튼을 클릭하여 새 차트를 생성하세요" 
                            FontSize="18" 
                            FontWeight="Light"
                            HorizontalAlignment="Center" 
                            VerticalAlignment="Center"
-                           Foreground="Gray"/>
+                           TextAlignment="Center"
+                           Foreground="Gray"
+                           TextWrapping="Wrap"
+                           IsHitTestVisible="False"/>
             </Grid>
         </Grid>
 
