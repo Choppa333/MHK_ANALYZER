@@ -5,6 +5,7 @@ using System.Windows;
 using System.Windows.Controls;
 using MGK_Analyzer.Controls;
 using MGK_Analyzer.Models;
+using System.Diagnostics;
 
 namespace MGK_Analyzer.Services
 {
@@ -12,8 +13,6 @@ namespace MGK_Analyzer.Services
     {
         private Canvas _mdiCanvas;
         private List<MdiChartWindow> _windows = new List<MdiChartWindow>();
-        private List<Mdi3DSurfaceWindow> _surface3DWindows = new List<Mdi3DSurfaceWindow>();
-        private List<MdiContourWindow> _contourWindows = new List<MdiContourWindow>();
         private int _windowZIndex = 0;
         private int _windowOffset = 0;
 
@@ -58,43 +57,6 @@ namespace MGK_Analyzer.Services
             return window;
         }
 
-        public Mdi3DSurfaceWindow Create3DSurfaceWindow(string windowTitle, List<Surface3DPoint> dataPoints)
-        {
-            var window = new Mdi3DSurfaceWindow
-            {
-                Width = 1000,
-                Height = 700,
-                WindowTitle = windowTitle,
-                DataPoints = dataPoints
-            };
-            
-            // 새 윈도우 위치 설정 (계단식)
-            var left = _windowOffset * 30;
-            var top = _windowOffset * 30;
-            
-            // Canvas 경계 체크
-            if (left + window.Width > _mdiCanvas.ActualWidth - 50)
-                left = 20;
-            if (top + window.Height > _mdiCanvas.ActualHeight - 50)
-                top = 20;
-                
-            Canvas.SetLeft(window, left);
-            Canvas.SetTop(window, top);
-            MGK_Analyzer.Services.MdiZOrderService.BringToFront(window);
-            
-            _mdiCanvas.Children.Add(window);
-            _surface3DWindows.Add(window);
-            
-            // 이벤트 핸들러 연결
-            window.WindowClosed += Surface3DWindow_Closed;
-            window.WindowMinimized += Surface3DWindow_Minimized;
-            window.WindowMaximized += Surface3DWindow_Maximized;
-            
-            _windowOffset = (_windowOffset + 1) % 10; // 최대 10개까지 계단식
-            
-            return window;
-        }
-
         private void Window_Closed(object sender, EventArgs e)
         {
             var window = (MdiChartWindow)sender;
@@ -111,118 +73,14 @@ namespace MGK_Analyzer.Services
             MGK_Analyzer.Services.MdiZOrderService.BringToFront(window);
         }
 
-        private void Surface3DWindow_Closed(object sender, EventArgs e)
-        {
-            var window = (Mdi3DSurfaceWindow)sender;
-            _mdiCanvas.Children.Remove(window);
-            _surface3DWindows.Remove(window);
-            
-            window.WindowClosed -= Surface3DWindow_Closed;
-            window.WindowMinimized -= Surface3DWindow_Minimized;
-            window.WindowMaximized -= Surface3DWindow_Maximized;
-        }
-
-        private void Surface3DWindow_Minimized(object sender, EventArgs e)
-        {
-            var window = (Mdi3DSurfaceWindow)sender;
-            // 최소화 로직 추가 가능
-        }
-
-        private void Surface3DWindow_Maximized(object sender, EventArgs e)
-        {
-            var window = (Mdi3DSurfaceWindow)sender;
-            Canvas.SetZIndex(window, ++_windowZIndex);
-        }
-
-        public MdiContourWindow CreateContourWindow(string windowTitle, List<Surface3DPoint> dataPoints)
-        {
-            var window = new MdiContourWindow
-            {
-                Width = 1000,
-                Height = 700,
-                WindowTitle = windowTitle,
-                DataPoints = dataPoints
-            };
-            
-            // 새 윈도우 위치 설정 (계단식)
-            var left = _windowOffset * 30;
-            var top = _windowOffset * 30;
-            
-            // Canvas 경계 체크
-            if (left + window.Width > _mdiCanvas.ActualWidth - 50)
-                left = 20;
-            if (top + window.Height > _mdiCanvas.ActualHeight - 50)
-                top = 20;
-                
-            Canvas.SetLeft(window, left);
-            Canvas.SetTop(window, top);
-            Canvas.SetZIndex(window, ++_windowZIndex);
-            
-            _mdiCanvas.Children.Add(window);
-            _contourWindows.Add(window);
-            
-            // 이벤트 핸들러 연결
-            window.WindowClosed += ContourWindow_Closed;
-            window.WindowMinimized += ContourWindow_Minimized;
-            window.WindowMaximized += ContourWindow_Maximized;
-            
-            _windowOffset = (_windowOffset + 1) % 10; // 최대 10개까지 계단식
-            
-            return window;
-        }
-
-        private void ContourWindow_Closed(object sender, EventArgs e)
-        {
-            var window = (MdiContourWindow)sender;
-            _mdiCanvas.Children.Remove(window);
-            _contourWindows.Remove(window);
-            
-            window.WindowClosed -= ContourWindow_Closed;
-            window.WindowMinimized -= ContourWindow_Minimized;
-            window.WindowMaximized -= ContourWindow_Maximized;
-        }
-
-        private void ContourWindow_Minimized(object sender, EventArgs e)
-        {
-            var window = (MdiContourWindow)sender;
-            // 최소화 로직 추가 가능
-        }
-
-        private void ContourWindow_Maximized(object sender, EventArgs e)
-        {
-            var window = (MdiContourWindow)sender;
-            Canvas.SetZIndex(window, ++_windowZIndex);
-        }
-
         public void CascadeWindows()
         {
-            int index = 0;
-            
             // 2D 차트 윈도우 계단식 배치
             for (int i = 0; i < _windows.Count; i++)
             {
-                Canvas.SetLeft(_windows[i], index * 30);
-                Canvas.SetTop(_windows[i], index * 30);
-                Canvas.SetZIndex(_windows[i], index);
-                index++;
-            }
-            
-            // 3D Surface 윈도우 계단식 배치
-            for (int i = 0; i < _surface3DWindows.Count; i++)
-            {
-                Canvas.SetLeft(_surface3DWindows[i], index * 30);
-                Canvas.SetTop(_surface3DWindows[i], index * 30);
-                Canvas.SetZIndex(_surface3DWindows[i], index);
-                index++;
-            }
-            
-            // Contour 윈도우 계단식 배치
-            for (int i = 0; i < _contourWindows.Count; i++)
-            {
-                Canvas.SetLeft(_contourWindows[i], index * 30);
-                Canvas.SetTop(_contourWindows[i], index * 30);
-                Canvas.SetZIndex(_contourWindows[i], index);
-                index++;
+                Canvas.SetLeft(_windows[i], i * 30);
+                Canvas.SetTop(_windows[i], i * 30);
+                Canvas.SetZIndex(_windows[i], i);
             }
         }
 
@@ -230,8 +88,6 @@ namespace MGK_Analyzer.Services
         {
             var allWindows = new List<FrameworkElement>();
             allWindows.AddRange(_windows);
-            allWindows.AddRange(_surface3DWindows);
-            allWindows.AddRange(_contourWindows);
             
             if (allWindows.Count == 0) return;
             
@@ -260,18 +116,6 @@ namespace MGK_Analyzer.Services
             {
                 window.Height = 30; // 타이틀바만 보이도록
             }
-            
-            // 3D Surface 윈도우 최소화
-            foreach (var window in _surface3DWindows)
-            {
-                window.Visibility = Visibility.Collapsed;
-            }
-            
-            // Contour 윈도우 최소화
-            foreach (var window in _contourWindows)
-            {
-                window.Visibility = Visibility.Collapsed;
-            }
         }
 
         public void CloseAll()
@@ -282,22 +126,8 @@ namespace MGK_Analyzer.Services
             {
                 window.Close_Click(null, null);
             }
-            
-            // 3D Surface 윈도우 닫기
-            var surface3DWindowsCopy = _surface3DWindows.ToList();
-            foreach (var window in surface3DWindowsCopy)
-            {
-                window.Close_Click(null, null);
-            }
-            
-            // Contour 윈도우 닫기
-            var contourWindowsCopy = _contourWindows.ToList();
-            foreach (var window in contourWindowsCopy)
-            {
-                window.Close_Click(null, null);
-            }
         }
 
-        public int WindowCount => _windows.Count + _surface3DWindows.Count + _contourWindows.Count;
+        public int WindowCount => _windows.Count;
     }
 }

@@ -906,78 +906,6 @@ namespace MGK_Analyzer
             return dataSet;
         }
 
-        private void Create3DSurfaceChart_Click(object sender, RoutedEventArgs e)
-        {
-            try
-            {
-                if (_mdiWindowManager == null)
-                {
-                    UpdateStatusBar("MDI 초기화가 완료되지 않았습니다.");
-                    return;
-                }
-                UpdateStatusBar("3D Surface 차트를 생성하고 있습니다...");
-                PerformanceLogger.Instance.LogInfo("3D Surface 차트 생성 시작", "3DSurface");
-                
-                // 샘플 데이터 생성
-                var sampleData = SampleDataGenerator.CreateSample3DData();
-                
-                // 3D Surface MDI 윈도우 생성
-                var mdi = _mdiWindowManager.Create3DSurfaceWindow("3D Surface Chart - " + DateTime.Now.ToString("HH:mm:ss"), sampleData);
-                mdi.WindowClosed += (s, args) => UpdateWindowCount();
-                
-                UpdateStatusBar("3D Surface 차트가 생성되었습니다.");
-                PerformanceLogger.Instance.LogInfo("3D Surface 차트 생성 완료", "3DSurface");
-                UpdateWindowCount();
-                
-                // 환영 메시지 숨기기
-                WelcomeMessage.Visibility = Visibility.Collapsed;
-            }
-            catch (Exception ex)
-            {
-                PerformanceLogger.Instance.LogError($"3D Surface 차트 생성 오류: {ex.Message}", "3DSurface");
-                MessageBox.Show($"3D Surface 차트 생성 중 오류 발생:\n{ex.Message}", 
-                              "오류", MessageBoxButton.OK, MessageBoxImage.Error);
-                UpdateStatusBar("3D Surface 차트 생성 실패");
-            }
-        }
-
-        private void CreateContourChart_Click(object sender, RoutedEventArgs e)
-        {
-            try
-            {
-                if (_mdiWindowManager == null)
-                {
-                    UpdateStatusBar("MDI 초기화가 완료되지 않았습니다.");
-                    return;
-                }
-                UpdateStatusBar("Contour 차트를 생성하고 있습니다...");
-                PerformanceLogger.Instance.LogInfo("Contour 차트 생성 시작", "Contour");
-                
-                // 3D Surface와 동일한 샘플 데이터 사용
-                var sampleData = SampleDataGenerator.CreateSample3DData();
-                
-                // Contour MDI 윈도우 생성
-                var mdi = _mdiWindowManager.CreateContourWindow("Contour Chart - " + DateTime.Now.ToString("HH:mm:ss"), sampleData);
-                mdi.WindowClosed += (s, args) => UpdateWindowCount();
-                
-                UpdateStatusBar("Contour 차트가 생성되었습니다.");
-                PerformanceLogger.Instance.LogInfo("Contour 차트 생성 완료", "Contour");
-                UpdateWindowCount();
-                
-                // 환영 메시지 숨기기
-                WelcomeMessage.Visibility = Visibility.Collapsed;
-            }
-            catch (Exception ex)
-            {
-                PerformanceLogger.Instance.LogError($"Contour 차트 생성 오류: {ex.Message}", "Contour");
-                MessageBox.Show($"Contour 차트 생성 중 오류 발생:\n{ex.Message}", 
-                              "오류", MessageBoxButton.OK, MessageBoxImage.Error);
-                UpdateStatusBar("Contour 차트 생성 실패");
-            }
-        }
-        
-
-
         #endregion
 
         #region 윈도우 관리
@@ -1018,7 +946,7 @@ namespace MGK_Analyzer
                 {
                     foreach (var child in MdiCanvas.Children)
                     {
-                        if (child is MdiChartWindow || child is Mdi3DSurfaceWindow || child is MdiContourWindow)
+                        if (child is MdiChartWindow)
                             _chartWindowCount++;
                     }
                 }

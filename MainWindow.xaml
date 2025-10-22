@@ -86,16 +86,6 @@
                 </MenuItem>
                 <MenuItem Header="데이터 필터링(_F)" Click="FilterData_Click"/>
                 <Separator/>
-                <MenuItem Header="3D Surface 차트(_3)" Click="Create3DSurfaceChart_Click">
-                    <MenuItem.Icon>
-                        <Path Data="{StaticResource ChartIcon}" Style="{StaticResource MenuIconStyle}" Fill="DarkBlue"/>
-                    </MenuItem.Icon>
-                </MenuItem>
-                <MenuItem Header="Contour 차트(_C)" Click="CreateContourChart_Click">
-                    <MenuItem.Icon>
-                        <Path Data="{StaticResource ChartIcon}" Style="{StaticResource MenuIconStyle}" Fill="DarkCyan"/>
-                    </MenuItem.Icon>
-                </MenuItem>
             </MenuItem>
 
             <MenuItem Header="프로젝트(_P)" x:Name="ProjectMenu">
@@ -194,20 +184,6 @@
                 <StackPanel Orientation="Horizontal">
                     <Path Data="{StaticResource NoLoadTestIcon}" Style="{StaticResource ToolbarIconStyle}" Fill="DodgerBlue"/>
                     <TextBlock Text="무부하시험" Margin="5,0" VerticalAlignment="Center"/>
-                </StackPanel>
-            </Button>
-            
-            <Button x:Name="Surface3DButton" Click="Create3DSurfaceChart_Click" ToolTip="3D Surface 차트 (효율맵)">
-                <StackPanel Orientation="Horizontal">
-                    <Path Data="{StaticResource ChartIcon}" Style="{StaticResource ToolbarIconStyle}" Fill="DarkBlue"/>
-                    <TextBlock Text="3D Surface" Margin="5,0" VerticalAlignment="Center"/>
-                </StackPanel>
-            </Button>
-            
-            <Button x:Name="ContourButton" Click="CreateContourChart_Click" ToolTip="Contour 차트 (등고선)">
-                <StackPanel Orientation="Horizontal">
-                    <Path Data="{StaticResource ChartIcon}" Style="{StaticResource ToolbarIconStyle}" Fill="DarkCyan"/>
-                    <TextBlock Text="Contour" Margin="5,0" VerticalAlignment="Center"/>
                 </StackPanel>
             </Button>
             
