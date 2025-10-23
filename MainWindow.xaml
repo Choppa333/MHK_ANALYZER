@@ -189,6 +189,16 @@
             
             <Separator/>
             
+            <!-- New: 효율맵2D (Contour) -->
+            <Button x:Name="Contour2DButton" Click="CreateContour2DChart_Click" ToolTip="효율맵2D">
+                <StackPanel Orientation="Horizontal">
+                    <Path Data="{StaticResource ChartIcon}" Style="{StaticResource ToolbarIconStyle}" Fill="DarkCyan"/>
+                    <TextBlock Text="효율맵2D" Margin="5,0" VerticalAlignment="Center"/>
+                </StackPanel>
+            </Button>
+            
+            <Separator/>
+            
             <Button x:Name="AnalyzeButton" Click="AnalyzeData_Click" ToolTip="데이터 분석">
                 <StackPanel Orientation="Horizontal">
                     <Path Data="{StaticResource ChartIcon}" Style="{StaticResource ToolbarIconStyle}" Fill="Purple"/>

@@ -960,6 +960,36 @@ namespace MGK_Analyzer
             }
         }
 
+        private void CreateContour2DChart_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                if (_mdiWindowManager == null)
+                {
+                    UpdateStatusBar("MDI 초기화가 완료되지 않았습니다.");
+                    return;
+                }
+                UpdateStatusBar("효율맵2D 차트를 생성하고 있습니다...");
+                PerformanceLogger.Instance.LogInfo("효율맵2D 차트 생성 시작", "Contour2D");
+
+                var mdi = _mdiWindowManager.CreateContour2DWindow("효율맵2D - " + DateTime.Now.ToString("HH:mm:ss"));
+                mdi.WindowClosed += (s, args) => UpdateWindowCount();
+
+                UpdateStatusBar("효율맵2D 차트가 생성되었습니다.");
+                PerformanceLogger.Instance.LogInfo("효율맵2D 차트 생성 완료", "Contour2D");
+                UpdateWindowCount();
+
+                WelcomeMessage.Visibility = Visibility.Collapsed;
+            }
+            catch (Exception ex)
+            {
+                PerformanceLogger.Instance.LogError($"효율맵2D 차트 생성 오류: {ex.Message}", "Contour2D");
+                MessageBox.Show($"효율맵2D 차트 생성 중 오류 발생:\n{ex.Message}",
+                              "오류", MessageBoxButton.OK, MessageBoxImage.Error);
+                UpdateStatusBar("효율맵2D 차트 생성 실패");
+            }
+        }
+
         #endregion
     }
 }
