@@ -14,6 +14,7 @@ namespace MGK_Analyzer.Services
         private Canvas _mdiCanvas;
         private List<MdiChartWindow> _windows = new List<MdiChartWindow>();
         private List<MdiContour2DWindow> _contour2DWindows = new List<MdiContour2DWindow>();
+        private List<MdiSurface3DWindow> _surface3DWindows = new List<MdiSurface3DWindow>();
         private int _windowZIndex = 0;
         private int _windowOffset = 0;
 
@@ -32,11 +33,9 @@ namespace MGK_Analyzer.Services
                 DataSet = dataSet
             };
             
-            // 새 윈도우 위치 설정 (계단식)
             var left = _windowOffset * 30;
             var top = _windowOffset * 30;
             
-            // Canvas 경계 체크
             if (left + window.Width > _mdiCanvas.ActualWidth - 50)
                 left = 20;
             if (top + window.Height > _mdiCanvas.ActualHeight - 50)
@@ -49,11 +48,10 @@ namespace MGK_Analyzer.Services
             _mdiCanvas.Children.Add(window);
             _windows.Add(window);
             
-            // 이벤트 핸들러 연결
             window.WindowClosed += Window_Closed;
             window.WindowActivated += Window_Activated;
             
-            _windowOffset = (_windowOffset + 1) % 10; // 최대 10개까지 계단식
+            _windowOffset = (_windowOffset + 1) % 10;
             
             return window;
         }
@@ -67,11 +65,9 @@ namespace MGK_Analyzer.Services
                 WindowTitle = windowTitle
             };
 
-            // 새 윈도우 위치 설정 (계단식)
             var left = _windowOffset * 30;
             var top = _windowOffset * 30;
 
-            // Canvas 경계 체크
             if (left + window.Width > _mdiCanvas.ActualWidth - 50)
                 left = 20;
             if (top + window.Height > _mdiCanvas.ActualHeight - 50)
@@ -84,11 +80,39 @@ namespace MGK_Analyzer.Services
             _mdiCanvas.Children.Add(window);
             _contour2DWindows.Add(window);
 
-            // 이벤트 핸들러 연결
             window.WindowClosed += Contour2DWindow_Closed;
             window.WindowActivated += Contour2DWindow_Activated;
 
-            _windowOffset = (_windowOffset + 1) % 10; // 최대 10개까지 계단식
+            _windowOffset = (_windowOffset + 1) % 10;
+
+            return window;
+        }
+
+        public MdiSurface3DWindow CreateSurface3DWindow(string windowTitle)
+        {
+            var window = new MdiSurface3DWindow
+            {
+                Width = 1000,
+                Height = 700,
+                WindowTitle = windowTitle
+            };
+
+            var left = _windowOffset * 30;
+            var top = _windowOffset * 30;
+
+            if (left + window.Width > _mdiCanvas.ActualWidth - 50)
+                left = 20;
+            if (top + window.Height > _mdiCanvas.ActualHeight - 50)
+                top = 20;
+
+            Canvas.SetLeft(window, left);
+            Canvas.SetTop(window, top);
+            MGK_Analyzer.Services.MdiZOrderService.BringToFront(window);
+
+            _mdiCanvas.Children.Add(window);
+            _surface3DWindows.Add(window);
+
+            _windowOffset = (_windowOffset + 1) % 10;
 
             return window;
         }
@@ -128,7 +152,6 @@ namespace MGK_Analyzer.Services
         public void CascadeWindows()
         {
             int index = 0;
-            // 2D 차트 윈도우 계단식 배치
             for (int i = 0; i < _windows.Count; i++)
             {
                 Canvas.SetLeft(_windows[i], index * 30);
@@ -137,12 +160,19 @@ namespace MGK_Analyzer.Services
                 index++;
             }
 
-            // Contour 2D 윈도우 계단식 배치
             for (int i = 0; i < _contour2DWindows.Count; i++)
             {
                 Canvas.SetLeft(_contour2DWindows[i], index * 30);
                 Canvas.SetTop(_contour2DWindows[i], index * 30);
                 Canvas.SetZIndex(_contour2DWindows[i], index);
+                index++;
+            }
+
+            for (int i = 0; i < _surface3DWindows.Count; i++)
+            {
+                Canvas.SetLeft(_surface3DWindows[i], index * 30);
+                Canvas.SetTop(_surface3DWindows[i], index * 30);
+                Canvas.SetZIndex(_surface3DWindows[i], index);
                 index++;
             }
         }
@@ -152,6 +182,7 @@ namespace MGK_Analyzer.Services
             var allWindows = new List<FrameworkElement>();
             allWindows.AddRange(_windows);
             allWindows.AddRange(_contour2DWindows);
+            allWindows.AddRange(_surface3DWindows);
             
             if (allWindows.Count == 0) return;
             
@@ -175,34 +206,30 @@ namespace MGK_Analyzer.Services
 
         public void MinimizeAll()
         {
-            // 2D 차트 윈도우 최소화
             foreach (var window in _windows)
-            {
-                window.Height = 30; // 타이틀바만 보이도록
-            }
-            // Contour 2D 윈도우 최소화
+                window.Height = 30;
             foreach (var window in _contour2DWindows)
-            {
-                window.Height = 30; // 동일 동작
-            }
+                window.Height = 30;
+            foreach (var window in _surface3DWindows)
+                window.Height = 30;
         }
 
         public void CloseAll()
         {
-            // 2D 차트 윈도우 닫기
             var windowsCopy = _windows.ToList();
             foreach (var window in windowsCopy)
-            {
                 window.Close_Click(null, null);
-            }
-            // Contour 2D 윈도우 닫기
+
             var contourCopy = _contour2DWindows.ToList();
             foreach (var window in contourCopy)
-            {
                 window.Close_Click(null, null);
-            }
+
+            var surfaceCopy = _surface3DWindows.ToList();
+            foreach (var window in surfaceCopy)
+                _mdiCanvas.Children.Remove(window);
+            _surface3DWindows.Clear();
         }
 
-        public int WindowCount => _windows.Count + _contour2DWindows.Count;
+        public int WindowCount => _windows.Count + _contour2DWindows.Count + _surface3DWindows.Count;
     }
 }

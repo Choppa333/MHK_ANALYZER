@@ -990,6 +990,27 @@ namespace MGK_Analyzer
             }
         }
 
+        private void CreateSurface3DChart_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                if (_mdiWindowManager == null)
+                {
+                    UpdateStatusBar("MDI 초기화가 완료되지 않았습니다.");
+                    return;
+                }
+                UpdateStatusBar("효율맵3D 차트를 생성하고 있습니다...");
+
+                var mdi = _mdiWindowManager.CreateSurface3DWindow("효율맵3D - " + DateTime.Now.ToString("HH:mm:ss"));
+                UpdateWindowCount();
+                WelcomeMessage.Visibility = Visibility.Collapsed;
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"효율맵3D 차트 생성 중 오류 발생:\n{ex.Message}", "오류", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
         #endregion
     }
 }

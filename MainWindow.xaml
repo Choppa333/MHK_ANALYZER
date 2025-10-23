@@ -197,6 +197,14 @@
                 </StackPanel>
             </Button>
             
+            <!-- New: 효율맵3D (Surface) -->
+            <Button x:Name="Surface3DButton" Click="CreateSurface3DChart_Click" ToolTip="효율맵3D">
+                <StackPanel Orientation="Horizontal">
+                    <Path Data="{StaticResource ChartIcon}" Style="{StaticResource ToolbarIconStyle}" Fill="DarkOrange"/>
+                    <TextBlock Text="효율맵3D" Margin="5,0" VerticalAlignment="Center"/>
+                </StackPanel>
+            </Button>
+            
             <Separator/>
             
             <Button x:Name="AnalyzeButton" Click="AnalyzeData_Click" ToolTip="데이터 분석">
