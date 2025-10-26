@@ -1,0 +1,82 @@
+<Project ToolsVersion="4.0" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
+    <Platform Condition=" '$(Platform)' == '' ">x64</Platform>
+    <ProductVersion>4.0</ProductVersion>
+    <ProjectGuid>a1b2c3d4-e5f6-4a5b-8c7d-9e0f1a2b3c4d</ProjectGuid>
+    <SchemaVersion>2.0</SchemaVersion>
+    <OutputName>MGK_Analyzer</OutputName>
+    <OutputType>Package</OutputType>
+
+    <!-- Suppress solution properties warning when building project directly -->
+    <DefineSolutionProperties>false</DefineSolutionProperties>
+
+    <!-- Prefer the standard WiX v3 MSBuild location when available -->
+    <WixTargetsPath Condition=" '$(WixTargetsPath)' == '' AND Exists('$(ProgramFiles(x86))\MSBuild\Microsoft\WiX\v3.x\Wix.targets') ">$(ProgramFiles(x86))\MSBuild\Microsoft\WiX\v3.x\Wix.targets</WixTargetsPath>
+    <!-- Fallback to the legacy default (may resolve to VS' MSBuild path) -->
+    <WixTargetsPath Condition=" '$(WixTargetsPath)' == '' ">$(MSBuildExtensionsPath32)\Microsoft\WiX\v3.x\Wix.targets</WixTargetsPath>
+
+    <!-- WiX tool binaries (candle.exe, light.exe, heat.exe) -->
+    <WixToolPath Condition=" '$(WixToolPath)' == '' AND Exists('$(ProgramFiles(x86))\WiX Toolset v3.14\bin') ">$(ProgramFiles(x86))\WiX Toolset v3.14\bin</WixToolPath>
+  </PropertyGroup>
+
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|x64' ">
+    <OutputPath>bin\$(Configuration)\</OutputPath>
+    <IntermediateOutputPath>obj\$(Configuration)\</IntermediateOutputPath>
+  </PropertyGroup>
+
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|x64' ">
+    <OutputPath>bin\$(Configuration)\</OutputPath>
+    <IntermediateOutputPath>obj\$(Configuration)\</IntermediateOutputPath>
+  </PropertyGroup>
+
+  <!-- Publish output directory and Candle define -->
+  <PropertyGroup>
+    <PublishDir>$(MSBuildProjectDirectory)\..\publish\win-x64\</PublishDir>
+    <DefineConstants>PublishDir=$(PublishDir)</DefineConstants>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="Product.wxs" />
+    <!-- Also include if already present from a previous build -->
+    <Compile Include="$(IntermediateOutputPath)HarvestedFiles.wxs" Condition="Exists('$(IntermediateOutputPath)HarvestedFiles.wxs')" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\MGK_Analyzer.csproj">
+      <Name>MGK_Analyzer</Name>
+      <Project>{11111111-1111-1111-1111-111111111111}</Project>
+      <Private>True</Private>
+      <DoNotHarvest>True</DoNotHarvest>
+      <RefProjectOutputGroups>Binaries;Satellites</RefProjectOutputGroups>
+      <RefTargetDir>INSTALLFOLDER</RefTargetDir>
+    </ProjectReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <WixExtension Include="WixUIExtension" />
+    <WixVariable Include="WixUILicenseRtf">
+      <Value>License.rtf</Value>
+    </WixVariable>
+  </ItemGroup>
+
+  <!-- Publish app and harvest files before building MSI -->
+  <Target Name="PublishApp">
+    <Message Text="Publishing MGK_Analyzer to $(PublishDir) (self-contained win-x64)" Importance="high" />
+    <Exec Command="dotnet publish &quot;$(MSBuildProjectDirectory)\..\MGK_Analyzer.csproj&quot; -c $(Configuration) -r win-x64 --self-contained true -o &quot;$(PublishDir)&quot;" />
+  </Target>
+
+  <Target Name="HarvestPublish" DependsOnTargets="PublishApp">
+    <MakeDir Directories="$(IntermediateOutputPath)" />
+    <Message Text="Harvesting published files from $(PublishDir)" Importance="high" />
+    <Exec Command="&quot;$(WixToolPath)\heat.exe&quot; dir &quot;$(PublishDir)&quot; -dr INSTALLFOLDER -cg HarvestedFiles -gg -sfrag -srd -var var.PublishDir -out &quot;$(IntermediateOutputPath)HarvestedFiles.wxs&quot;" />
+    <!-- Ensure the generated harvested file is compiled in this build -->
+    <ItemGroup>
+      <Compile Include="$(IntermediateOutputPath)HarvestedFiles.wxs" />
+    </ItemGroup>
+  </Target>
+
+  <Target Name="BeforeBuild" DependsOnTargets="HarvestPublish" />
+
+  <Import Project="$(WixTargetsPath)" />
+</Project>

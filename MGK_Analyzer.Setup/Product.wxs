@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+  <Product Id="*" 
+           Name="MGK Analyzer" 
+           Language="1033" 
+           Version="1.0.0" 
+           Manufacturer="MGK Analyzer" 
+           UpgradeCode="12345678-1234-1234-1234-123456789012">
+    
+    <Package InstallerVersion="200" 
+             Compressed="yes" 
+             InstallScope="perMachine" 
+             Platform="x64"/>
+
+    <MajorUpgrade DowngradeErrorMessage="A newer version of [ProductName] is already installed." />
+    
+    <MediaTemplate EmbedCab="yes" />
+
+    <!-- Set the target directory property for WixUI_InstallDir -->
+    <Property Id="WIXUI_INSTALLDIR" Value="INSTALLFOLDER" />
+
+    <!-- Define the installation directory structure -->
+    <Directory Id="TARGETDIR" Name="SourceDir">
+      <!-- Use 64-bit Program Files root for x64 package to avoid ICE80 -->
+      <Directory Id="ProgramFiles64Folder">
+        <Directory Id="INSTALLFOLDER" Name="MGK Analyzer" />
+      </Directory>
+      
+      <!-- Program Menu shortcuts -->
+      <Directory Id="ProgramMenuFolder">
+        <Directory Id="ApplicationProgramsFolder" Name="MGK Analyzer" />
+      </Directory>
+      
+      <!-- Desktop shortcuts -->
+      <Directory Id="DesktopFolder" Name="Desktop" />
+    </Directory>
+
+    <!-- Define the feature to install -->
+    <Feature Id="ProductFeature" 
+             Title="MGK Analyzer" 
+             Level="1"
+             Description="MGK Analyzer - 3D Efficiency Surface Visualization Tool">
+      <!-- Harvested application files -->
+      <ComponentGroupRef Id="HarvestedFiles" />
+      
+      <!-- Shortcuts -->
+      <ComponentRef Id="ProgramMenuShortcut" />
+      <ComponentRef Id="DesktopShortcut" />
+    </Feature>
+
+    <!-- Program Menu Shortcut -->
+    <DirectoryRef Id="ApplicationProgramsFolder">
+      <Component Id="ProgramMenuShortcut" 
+                 Guid="11223344-5566-7788-99aa-bbccddeeff00"
+                 Win64="yes">
+        <Shortcut Id="ApplicationStartMenuShortcut" 
+                  Name="MGK Analyzer" 
+                  Description="3D Efficiency Surface Visualization Tool"
+                  Target="[INSTALLFOLDER]MGK_Analyzer.exe" 
+                  WorkingDirectory="INSTALLFOLDER" />
+        <RemoveFolder Id="Remove_ApplicationProgramsFolder" Directory="ApplicationProgramsFolder" On="uninstall" />
+        <RegistryValue Root="HKCU" 
+                       Key="Software\MGK Analyzer\MGK_Analyzer" 
+                       Name="installed" 
+                       Type="integer" 
+                       Value="1" 
+                       KeyPath="yes" />
+      </Component>
+    </DirectoryRef>
+
+    <!-- Desktop Shortcut -->
+    <DirectoryRef Id="DesktopFolder">
+      <Component Id="DesktopShortcut" 
+                 Guid="aabbccdd-eeff-0011-2233-445566778899"
+                 Win64="yes">
+        <Shortcut Id="DesktopApplicationShortcut" 
+                  Name="MGK Analyzer" 
+                  Description="3D Efficiency Surface Visualization Tool"
+                  Target="[INSTALLFOLDER]MGK_Analyzer.exe" 
+                  WorkingDirectory="INSTALLFOLDER" />
+        <RegistryValue Root="HKCU" 
+                       Key="Software\MGK Analyzer\MGK_Analyzer" 
+                       Name="desktopInstalled" 
+                       Type="integer" 
+                       Value="1" 
+                       KeyPath="yes" />
+      </Component>
+    </DirectoryRef>
+
+    <!-- Standard UI with InstallDir and License -->
+    <UIRef Id="WixUI_InstallDir" />
+  </Product>
+</Wix>

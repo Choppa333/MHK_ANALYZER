@@ -1,0 +1,28 @@
+# Build outputs
+bin/
+obj/
+*.wixpdb
+*.wixobj
+
+# Visual Studio
+.vs/
+*.user
+*.suo
+
+# Installer outputs
+*.msi
+*.exe
+
+# Temporary files
+*.tmp
+*.temp
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+*.swp
+*.swo

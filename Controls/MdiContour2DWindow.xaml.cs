@@ -89,7 +89,7 @@ namespace MGK_Analyzer.Controls
 
             double[,] z = BuildGrid(xs, ys, raw);
 
-            var model = new PlotModel { Title = "Efficiency Map (OxyPlot)" };
+            var model = new PlotModel { Title = "Efficiency Map" };
 
             // Color axis with custom palette and external controls
             _colorAxis = new LinearColorAxis

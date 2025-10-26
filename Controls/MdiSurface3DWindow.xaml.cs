@@ -175,11 +175,12 @@ namespace MGK_Analyzer.Controls
                 var pts = SurfaceChart.ItemsSource as ObservableCollection<SurfacePoint>;
                 if (pts == null || pts.Count == 0) { ZLegend.ItemsSource = null; return; }
 
-                double zMin = pts.Min(p => p.Z);
-                double zMax = pts.Max(p => p.Z);
+                // Y 범위(효율성)를 기반으로 범례 생성 - Z 범위(토크) 대신
+                double yMin = pts.Min(p => p.Y);
+                double yMax = pts.Max(p => p.Y);
                 int levels = Math.Max(2, (int)Math.Round(SldLevels.Value));
 
-                // Get brushes from continuous custom palette (do NOT set BrushCount)
+                // Get brushes from current palette
                 List<Brush> brushList;
                 if (SurfaceChart.Palette == ChartColorPalette.Custom && SurfaceChart.ColorModel?.CustomBrushes != null && SurfaceChart.ColorModel.CustomBrushes.Count > 0)
                 {
@@ -198,13 +199,13 @@ namespace MGK_Analyzer.Controls
                     brushes.Add(brushList[idx]);
                 }
 
-                double step = (zMax - zMin) / levels;
-                string fmt = (SurfaceChart.ZAxis as SurfaceAxis)?.LabelFormat ?? "0.0";
+                double step = (yMax - yMin) / levels;
+                string fmt = (SurfaceChart.YAxis as SurfaceAxis)?.LabelFormat ?? "0.0";  // Y??(?????) ???? ???
                 var items = new List<object>();
-                double start = zMin;
+                double start = yMin;
                 for (int i = 0; i < levels; i++)
                 {
-                    double end = (i == levels - 1) ? zMax : start + step;
+                    double end = (i == levels - 1) ? yMax : start + step;
                     string label = (double.IsNaN(start) || double.IsNaN(end)) ? string.Empty :
                         $"{start.ToString(fmt, CultureInfo.InvariantCulture)} - {end.ToString(fmt, CultureInfo.InvariantCulture)}";
                     items.Add(new { Brush = brushes[Math.Min(i, brushes.Count - 1)], Label = label });
@@ -215,7 +216,7 @@ namespace MGK_Analyzer.Controls
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"[Surface3D/MDI] UpdateZLegend error: {ex.Message}");
+                Debug.WriteLine($"[Surface3D/MDI] UpdateYLegend error: {ex.Message}");
             }
         }
 
@@ -345,8 +346,25 @@ namespace MGK_Analyzer.Controls
             int levels = (int)Math.Round(SldLevels.Value);
             if (levels < 2) levels = 2;
 
-            // 생성 시 Z 범위를 기반으로 색상 생성 (연속 팔레트)
-            SetContinuousPaletteForZRange(zMin, zMax, Math.Max(64, levels * 16));
+            // Use ComboBox selection
+            var sel = CmbPalette?.SelectedIndex ?? 0;
+            if (sel == 3) // Custom (Blue-Yellow-Red)
+            {
+                SetContinuousPaletteForZRange(zMin, zMax, Math.Max(64, levels * 16));
+            }
+            else
+            {
+                // Built-in palettes
+                SurfaceChart.Palette = sel switch
+                {
+                    0 => ChartColorPalette.Metro,
+                    1 => ChartColorPalette.BlueChrome,
+                    2 => ChartColorPalette.GreenChrome,
+                    _ => ChartColorPalette.Metro
+                };
+                // Reset to default model for built-in palette
+                SurfaceChart.ColorModel = new ChartColorModel();
+            }
 
             TryForceColorMappingByZ();
         }
@@ -356,9 +374,10 @@ namespace MGK_Analyzer.Controls
         {
             var pts = SurfaceChart.ItemsSource as ObservableCollection<SurfacePoint>;
             if (pts == null || pts.Count == 0) return;
-            double zMin = pts.Min(p => p.Z);
-            double zMax = pts.Max(p => p.Z);
-            ApplyPalette(zMin, zMax);
+            // Y 범위(효율성)를 기반으로 팔레트 생성
+            double yMin = pts.Min(p => p.Y);
+            double yMax = pts.Max(p => p.Y);
+            ApplyPalette(yMin, yMax);
         }
 
         // Z 범위를 기반으로 연속 팔레트 생성

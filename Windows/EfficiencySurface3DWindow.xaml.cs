@@ -49,9 +49,9 @@ namespace MGK_Analyzer.Windows
 
             SldTilt.ValueChanged     += (_, __) => SurfaceChart.Tilt = SldTilt.Value;
             SldRotate.ValueChanged   += (_, __) => SurfaceChart.Rotate = SldRotate.Value;
-            SldLevels.ValueChanged   += (_, __) => { ApplyPalette(); UpdateZLegend(); };
+            SldLevels.ValueChanged   += (_, __) => { ApplyPalette(); UpdateYLegend(); };
             SldOpacity.ValueChanged  += (_, __) => SurfaceChart.Opacity = SldOpacity.Value;
-            CmbPalette.SelectionChanged += (_, __) => { ApplyPalette(); UpdateZLegend(); };
+            CmbPalette.SelectionChanged += (_, __) => { ApplyPalette(); UpdateYLegend(); };
             BtnResetView.Click += (_, __) => ResetView();
 
             LoadAndRender();   // SURFACE3D
@@ -129,10 +129,10 @@ namespace MGK_Analyzer.Windows
                 MessageBox.Show($"ItemsSource 크기({DataValues.Count})와 Grid 크기({RowSize}×{ColumnSize}={expected})가 일치하지 않습니다.", "Surface3D 데이터 경고", MessageBoxButton.OK, MessageBoxImage.Warning);
             }
 
-            // Calculate Z range BEFORE setting ItemsSource
-            double zMin = DataValues.Count > 0 ? DataValues.Min(r => r.Z) : 0;
-            double zMax = DataValues.Count > 0 ? DataValues.Max(r => r.Z) : 1;
-            Debug.WriteLine($"[Surface3D] Z Range: {zMin} - {zMax}");
+            // Calculate Y range BEFORE setting ItemsSource (Y = Efficiency)
+            double yMin = DataValues.Count > 0 ? DataValues.Min(r => r.Y) : 0;
+            double yMax = DataValues.Count > 0 ? DataValues.Max(r => r.Y) : 1;
+            Debug.WriteLine($"[Surface3D] Y Range (Efficiency): {yMin} - {yMax}");
 
             SurfaceChart.RowSize      = RowSize;     // set before ItemsSource
             SurfaceChart.ColumnSize   = ColumnSize;
@@ -153,10 +153,14 @@ namespace MGK_Analyzer.Windows
                 }
             }
 
+            // Calculate Z range for chart axis (Z = Torque)
+            double zMin = DataValues.Count > 0 ? DataValues.Min(r => r.Z) : 0;
+            double zMax = DataValues.Count > 0 ? DataValues.Max(r => r.Z) : 1;
+
             SurfaceChart.Type = SurfaceType.Surface;
-            ApplyZRange(zMin, zMax);      // Pass Z range explicitly
-            ApplyPalette(zMin, zMax);     // Pass Z range to generate correct palette
-            UpdateZLegend();    // display legend only
+            ApplyZRange(zMin, zMax);      // Pass Z range (Torque) for chart axis
+            ApplyPalette(yMin, yMax);     // Pass Y range (Efficiency) for color palette
+            UpdateYLegend();    // display legend only
 
             this.Title = $"3D Efficiency Surface | parsed={diag.ParsedCount} pts | CSV lines={diag.TotalLines} | grid={RowSize}×{ColumnSize}"; // DIAG
 
@@ -164,12 +168,13 @@ namespace MGK_Analyzer.Windows
             SurfaceChart.InvalidateVisual();
         }
 
-        private void UpdateZLegend()
+        private void UpdateYLegend()
         {
             try
             {
-                double zMin = DataValues.Count > 0 ? DataValues.Min(r => r.Z) : 0;
-                double zMax = DataValues.Count > 0 ? DataValues.Max(r => r.Z) : 1;
+                // Calculate Y range (Efficiency) for legend
+                double yMin = DataValues.Count > 0 ? DataValues.Min(r => r.Y) : 0;
+                double yMax = DataValues.Count > 0 ? DataValues.Max(r => r.Y) : 1;
                 int levels = Math.Max(2, (int)Math.Round(SldLevels.Value));
 
                 // Sample directly from continuous custom palette
@@ -191,13 +196,13 @@ namespace MGK_Analyzer.Windows
                     brushes.Add(brushList[idx]);
                 }
 
-                double step = (zMax - zMin) / levels;
+                double step = (yMax - yMin) / levels;
                 string fmt = (SurfaceChart.ZAxis as SurfaceAxis)?.LabelFormat ?? "0.0";
                 var items = new List<LegendItem>();
-                double start = zMin;
+                double start = yMin;
                 for (int i = 0; i < levels; i++)
                 {
-                    double end = (i == levels - 1) ? zMax : start + step;
+                    double end = (i == levels - 1) ? yMax : start + step;
                     items.Add(new LegendItem
                     {
                         Fill = brushes[Math.Min(i, brushes.Count - 1)],
@@ -210,7 +215,7 @@ namespace MGK_Analyzer.Windows
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"[Surface3D] UpdateZLegend error: {ex.Message}");
+                Debug.WriteLine($"[Surface3D] UpdateYLegend error: {ex.Message}");
             }
         }
 
@@ -344,7 +349,7 @@ namespace MGK_Analyzer.Windows
             int levels = (int)Math.Round(SldLevels.Value);
             if (levels < 2) levels = 2;
 
-            // 생성 시 Z 범위를 기반으로 색상 생성
+            // Y 범위(효율성)를 기반으로 색상 생성
             SetContinuousPaletteForZRange(zMin, zMax, Math.Max(64, levels * 16));
 
             TryForceColorMappingByZ();
@@ -354,9 +359,9 @@ namespace MGK_Analyzer.Windows
         private void ApplyPalette()
         {
             if (DataValues.Count == 0) return;
-            double zMin = DataValues.Min(r => r.Z);
-            double zMax = DataValues.Max(r => r.Z);
-            ApplyPalette(zMin, zMax);
+            double yMin = DataValues.Min(r => r.Y);  // Y축(효율성) 범위 사용
+            double yMax = DataValues.Max(r => r.Y);
+            ApplyPalette(yMin, yMax);
         }
 
         // Z 범위를 기반으로 팔레트 생성
@@ -376,7 +381,7 @@ namespace MGK_Analyzer.Windows
                 model.CustomBrushes.Add(new SolidColorBrush(LerpBlueYellowRed(t)));
             }
             SurfaceChart.ColorModel = model;
-            Debug.WriteLine($"[Surface3D] SetContinuousPaletteForZRange: steps={steps}, zRange=[{zMin},{zMax}]");
+            Debug.WriteLine($"[Surface3D] SetContinuousPaletteForZRange: steps={steps}, yRange(Efficiency)=[{zMin},{zMax}]");
         }
 
         // Try to force Z-based color mapping if the SDK exposes such a property (done via reflection to avoid hard dependency)

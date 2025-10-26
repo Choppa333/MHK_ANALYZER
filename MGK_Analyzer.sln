@@ -1,37 +1,45 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
-VisualStudioVersion = 17.14.36414.22
+VisualStudioVersion = 17.0.31903.59
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MGK_Analyzer", "MGK_Analyzer.csproj", "{0DDF273D-D3F9-4148-B136-DF56280CDF71}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MGK_Analyzer", "MGK_Analyzer.csproj", "{6F838CC5-47CC-41E0-B8BE-09D3F33A5CDE}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "syncfusion.dockingmanagerdemos.wpf_lib", "..\..\..\..\..\Public\Documents\Syncfusion\WPF\31.1.17\SampleBrowser\dockingmanager\syncfusion.dockingmanagerdemos.wpf_lib.csproj", "{2B5B361E-F5FE-8743-032E-7F0AAE423B12}"
-EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SurfaceChartDemo", "..\..\..\..\Downloads\SurfaceChartDemo-1998279060\SurfaceChartDemo\SurfaceChartDemo\SurfaceChartDemo.csproj", "{37971AEE-6DF1-4D16-8F73-765330388848}"
+Project("{54435603-DBB4-11D2-8724-00A0C9A8B90C}") = "MGK_ANALYZER_SETUP", "..\MGK_ANALYZER_SETUP\MGK_ANALYZER_SETUP.vdproj", "{DE9DEE37-A98D-06AA-F8A0-927C881D522B}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
+		Debug|x64 = Debug|x64
+		Debug|x86 = Debug|x86
 		Release|Any CPU = Release|Any CPU
+		Release|x64 = Release|x64
+		Release|x86 = Release|x86
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
-		{0DDF273D-D3F9-4148-B136-DF56280CDF71}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{0DDF273D-D3F9-4148-B136-DF56280CDF71}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{0DDF273D-D3F9-4148-B136-DF56280CDF71}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{0DDF273D-D3F9-4148-B136-DF56280CDF71}.Release|Any CPU.Build.0 = Release|Any CPU
-		{2B5B361E-F5FE-8743-032E-7F0AAE423B12}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{2B5B361E-F5FE-8743-032E-7F0AAE423B12}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{2B5B361E-F5FE-8743-032E-7F0AAE423B12}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{2B5B361E-F5FE-8743-032E-7F0AAE423B12}.Release|Any CPU.Build.0 = Release|Any CPU
-		{37971AEE-6DF1-4D16-8F73-765330388848}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{37971AEE-6DF1-4D16-8F73-765330388848}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{37971AEE-6DF1-4D16-8F73-765330388848}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{37971AEE-6DF1-4D16-8F73-765330388848}.Release|Any CPU.Build.0 = Release|Any CPU
+		{6F838CC5-47CC-41E0-B8BE-09D3F33A5CDE}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{6F838CC5-47CC-41E0-B8BE-09D3F33A5CDE}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{6F838CC5-47CC-41E0-B8BE-09D3F33A5CDE}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{6F838CC5-47CC-41E0-B8BE-09D3F33A5CDE}.Debug|x64.Build.0 = Debug|Any CPU
+		{6F838CC5-47CC-41E0-B8BE-09D3F33A5CDE}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{6F838CC5-47CC-41E0-B8BE-09D3F33A5CDE}.Debug|x86.Build.0 = Debug|Any CPU
+		{6F838CC5-47CC-41E0-B8BE-09D3F33A5CDE}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{6F838CC5-47CC-41E0-B8BE-09D3F33A5CDE}.Release|Any CPU.Build.0 = Release|Any CPU
+		{6F838CC5-47CC-41E0-B8BE-09D3F33A5CDE}.Release|x64.ActiveCfg = Release|Any CPU
+		{6F838CC5-47CC-41E0-B8BE-09D3F33A5CDE}.Release|x64.Build.0 = Release|Any CPU
+		{6F838CC5-47CC-41E0-B8BE-09D3F33A5CDE}.Release|x86.ActiveCfg = Release|Any CPU
+		{6F838CC5-47CC-41E0-B8BE-09D3F33A5CDE}.Release|x86.Build.0 = Release|Any CPU
+		{DE9DEE37-A98D-06AA-F8A0-927C881D522B}.Debug|Any CPU.ActiveCfg = Debug
+		{DE9DEE37-A98D-06AA-F8A0-927C881D522B}.Debug|x64.ActiveCfg = Debug
+		{DE9DEE37-A98D-06AA-F8A0-927C881D522B}.Debug|x86.ActiveCfg = Debug
+		{DE9DEE37-A98D-06AA-F8A0-927C881D522B}.Release|Any CPU.ActiveCfg = Release
+		{DE9DEE37-A98D-06AA-F8A0-927C881D522B}.Release|x64.ActiveCfg = Release
+		{DE9DEE37-A98D-06AA-F8A0-927C881D522B}.Release|x86.ActiveCfg = Release
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
-		SolutionGuid = {708EB098-BFA4-481A-8735-6949A7D3CEB5}
+		SolutionGuid = {B6C81CC8-CD2F-4FCB-81B4-53FEEE1E275A}
 	EndGlobalSection
 EndGlobal
