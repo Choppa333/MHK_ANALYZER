@@ -10,25 +10,6 @@
         WindowStartupLocation="CenterScreen">
     
     <Window.Resources>
-        <!-- 슬라이딩 애니메이션을 위한 스타일 -->
-        <Storyboard x:Key="SlideInStoryboard">
-            <DoubleAnimation Storyboard.TargetName="FileExplorerPanel"
-                           Storyboard.TargetProperty="Width"
-                           From="0" To="200" Duration="0:0:0.2">
-                <DoubleAnimation.EasingFunction>
-                    <CubicEase EasingMode="EaseOut"/>
-                </DoubleAnimation.EasingFunction>
-            </DoubleAnimation>
-        </Storyboard>
-        <Storyboard x:Key="SlideOutStoryboard">
-            <DoubleAnimation Storyboard.TargetName="FileExplorerPanel"
-                           Storyboard.TargetProperty="Width"
-                           From="200" To="0" Duration="0:0:0.15">
-                <DoubleAnimation.EasingFunction>
-                    <CubicEase EasingMode="EaseIn"/>
-                </DoubleAnimation.EasingFunction>
-            </DoubleAnimation>
-        </Storyboard>
     </Window.Resources>
     
     <Grid>
@@ -126,50 +107,11 @@
 
         <!-- 툴바 -->
         <ToolBar Grid.Row="1" Background="White" BorderBrush="LightGray" BorderThickness="0,0,0,1">
-            <Button x:Name="NewButton" Click="NewFile_Click" ToolTip="새로 만들기">
-                <StackPanel Orientation="Horizontal">
-                    <Path Data="{StaticResource NewFileIcon}" Style="{StaticResource ToolbarIconStyle}" Fill="DodgerBlue"/>
-                    <TextBlock Text="새로만들기" Margin="5,0" VerticalAlignment="Center"/>
-                </StackPanel>
-            </Button>
-            
-            <Button x:Name="OpenButton" Click="OpenFile_Click" ToolTip="열기">
-                <StackPanel Orientation="Horizontal">
-                    <Path Data="{StaticResource OpenFileIcon}" Style="{StaticResource ToolbarIconStyle}" Fill="ForestGreen"/>
-                    <TextBlock Text="열기" Margin="5,0" VerticalAlignment="Center"/>
-                </StackPanel>
-            </Button>
-            
-            <Button x:Name="SaveButton" Click="SaveFile_Click" ToolTip="저장">
-                <StackPanel Orientation="Horizontal">
-                    <Path Data="{StaticResource SaveIcon}" Style="{StaticResource ToolbarIconStyle}" Fill="Orange"/>
-                    <TextBlock Text="저장" Margin="5,0" VerticalAlignment="Center"/>
-                </StackPanel>
-            </Button>
-            
-            <Separator/>
-            
-            <Button x:Name="ImportButton" Click="ImportData_Click" ToolTip="데이터 가져오기">
-                <StackPanel Orientation="Horizontal">
-                    <Path Data="{StaticResource ImportIcon}" Style="{StaticResource ToolbarIconStyle}" Fill="SteelBlue"/>
-                    <TextBlock Text="가져오기" Margin="5,0" VerticalAlignment="Center"/>
-                </StackPanel>
-            </Button>
-            
-            <Button x:Name="ExportButton" Click="ExportData_Click" ToolTip="데이터 내보내기">
-                <StackPanel Orientation="Horizontal">
-                    <Path Data="{StaticResource ExportIcon}" Style="{StaticResource ToolbarIconStyle}" Fill="Crimson"/>
-                    <TextBlock Text="내보내기" Margin="5,0" VerticalAlignment="Center"/>
-                </StackPanel>
-            </Button>
-            
-            <Separator/>
-            
             <!-- Test Type Buttons -->
-            <Button x:Name="StandardTestButton" Click="StandardTest_Click" ToolTip="일반시험">
+            <Button x:Name="StandardTestButton" Click="StandardTest_Click" ToolTip="정격시험">
                 <StackPanel Orientation="Horizontal">
                     <Path Data="{StaticResource StandardTestIcon}" Style="{StaticResource ToolbarIconStyle}" Fill="Green"/>
-                    <TextBlock Text="일반시험" Margin="5,0" VerticalAlignment="Center"/>
+                    <TextBlock Text="정격시험" Margin="5,0" VerticalAlignment="Center"/>
                 </StackPanel>
             </Button>
             
@@ -184,6 +126,14 @@
                 <StackPanel Orientation="Horizontal">
                     <Path Data="{StaticResource NoLoadTestIcon}" Style="{StaticResource ToolbarIconStyle}" Fill="DodgerBlue"/>
                     <TextBlock Text="무부하시험" Margin="5,0" VerticalAlignment="Center"/>
+                </StackPanel>
+            </Button>
+            
+            <!-- 새 NT-Curve 시험 버튼 추가 -->
+            <Button x:Name="NtCurveTestButton" Click="NtCurveTest_Click" ToolTip="NT-Curve 시험">
+                <StackPanel Orientation="Horizontal">
+                    <Path Data="{StaticResource ChartIcon}" Style="{StaticResource ToolbarIconStyle}" Fill="MediumPurple"/>
+                    <TextBlock Text="NT-Curve시험" Margin="5,0" VerticalAlignment="Center"/>
                 </StackPanel>
             </Button>
             
@@ -229,7 +179,7 @@
                     <TextBlock Text="테마" Margin="5,0" VerticalAlignment="Center"/>
                 </StackPanel>
             </Button>
-            
+
             <Separator/>
 
             <!-- MDI window controls moved to toolbar -->
@@ -257,138 +207,24 @@
             </StackPanel>
         </ToolBar>
 
-        <!-- 메인 작업 영역 with 파일 탐색기 -->
+        <!-- 메인 작업 영역 -->
         <Grid Grid.Row="2">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="Auto" MinWidth="25" x:Name="FileExplorerColumn"/>
-                <!-- 파일 탐색기 영역 -->
-                <ColumnDefinition Width="Auto" x:Name="SplitterColumn"/>
-                <!-- GridSplitter -->
-                <ColumnDefinition Width="*" x:Name="ContentColumn"/>
-                <!-- 메인 컨텐츠 영역 -->
-            </Grid.ColumnDefinitions>
-
-            <!-- 파일 탐색기 전체 영역 -->
-            <Border Grid.Column="0" x:Name="FileExplorerContainer" ClipToBounds="True">
-                <Grid>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="25"/>
-                        <!-- 탭 영역 -->
-                        <ColumnDefinition Width="*"/>
-                        <!-- 패널 영역 -->
-                    </Grid.ColumnDefinitions>
-
-                    <!-- 숨겨진 상태의 탭 버튼 -->
-                    <Border Grid.Column="0" x:Name="FileExplorerTab"
-                            Background="#FF2D2D30" 
-                            BorderBrush="#FF3E3E42" BorderThickness="0,0,1,0"
-                            Cursor="Hand"
-                            MouseEnter="FileExplorerTab_MouseEnter"
-                            MouseDown="FileExplorerTab_MouseDown">
-                        <StackPanel Orientation="Vertical" VerticalAlignment="Center">
-                            <TextBlock Text="DIR" FontSize="10" Foreground="White" FontWeight="Bold"
-                                       HorizontalAlignment="Center" Margin="1"/>
-                            <TextBlock Text="F" FontSize="8" Foreground="#FFAAAAAA" 
-                                       HorizontalAlignment="Center" Margin="0,1"/>
-                            <TextBlock Text="i" FontSize="8" Foreground="#FFAAAAAA" 
-                                       HorizontalAlignment="Center" Margin="0,1"/>
-                            <TextBlock Text="l" FontSize="8" Foreground="#FFAAAAAA" 
-                                       HorizontalAlignment="Center" Margin="0,1"/>
-                            <TextBlock Text="e" FontSize="8" Foreground="#FFAAAAAA" 
-                                       HorizontalAlignment="Center" Margin="0,1"/>
-                            <TextBlock Text="s" FontSize="8" Foreground="#FFAAAAAA" 
-                                       HorizontalAlignment="Center" Margin="0,1"/>
-                        </StackPanel>
-                    </Border>
-
-                    <!-- 파일 탐색기 패널 -->
-                    <Border Grid.Column="1" x:Name="FileExplorerPanel"
-                            Width="0" Background="#FFF5F5F5"
-                            BorderBrush="#FFCCCCCC" BorderThickness="0,0,1,0"
-                            MouseLeave="FileExplorerPanel_MouseLeave">
-                        <Grid>
-                            <Grid.RowDefinitions>
-                                <RowDefinition Height="Auto"/>
-                                <!-- 헤더 -->
-                                <RowDefinition Height="*"/>
-                                <!-- 파일 트리 -->
-                            </Grid.RowDefinitions>
-
-                            <!-- 파일 탐색기 헤더 -->
-                            <Border Grid.Row="0" Background="#FFE1E1E1" 
-                                    BorderBrush="#FFCCCCCC" BorderThickness="0,0,0,1"
-                                    Height="30">
-                                <Grid>
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="*"/>
-                                        <ColumnDefinition Width="Auto"/>
-                                    </Grid.ColumnDefinitions>
-                                    
-                                    <TextBlock Grid.Column="0" Text="파일 탐색기" 
-                                               FontSize="12" FontWeight="SemiBold"
-                                               VerticalAlignment="Center" Margin="8,0"/>
-                                    
-                                    <!-- 고정/해제 버튼 -->
-                                    <ToggleButton Grid.Column="1" x:Name="PinButton"
-                                                  Width="24" Height="20" Margin="5"
-                                                  Checked="PinButton_Checked"
-                                                  Unchecked="PinButton_Unchecked"
-                                                  ToolTip="고정/해제">
-                                        <Path Data="{StaticResource PinIcon}" 
-                                              Width="12" Height="12" 
-                                              Fill="{Binding RelativeSource={RelativeSource AncestorType=ToggleButton}, Path=Foreground}"
-                                              Stretch="Uniform"/>
-                                    </ToggleButton>
-                                </Grid>
-                            </Border>
-
-                            <!-- 파일 트리뷰 -->
-                            <TreeView Grid.Row="1" x:Name="FileTreeView"
-                                      Background="Transparent" BorderThickness="0"
-                                      Margin="5" ScrollViewer.HorizontalScrollBarVisibility="Auto">
-                                <TreeView.ItemContainerStyle>
-                                    <Style TargetType="TreeViewItem">
-                                        <Setter Property="IsExpanded" Value="False"/>
-                                        <Setter Property="FontSize" Value="11"/>
-                                        <Setter Property="Padding" Value="2"/>
-                                    </Style>
-                                </TreeView.ItemContainerStyle>
-                            </TreeView>
-                        </Grid>
-                    </Border>
-                </Grid>
-            </Border>
-
-            <!-- GridSplitter for 리사이징 -->
-            <GridSplitter Grid.Column="1" x:Name="FileExplorerSplitter"
-                          Width="5" Background="#FFCCCCCC"
-                          HorizontalAlignment="Stretch"
-                          VerticalAlignment="Stretch"
-                          Visibility="Collapsed"
-                          IsEnabled="False"
-                          ShowsPreview="False"
-                          ResizeBehavior="PreviousAndCurrent"
-                          ResizeDirection="Columns"/>
-
             <!-- 메인 컨텐츠 영역 - MDI Container -->
-            <Grid Grid.Column="2" Background="WhiteSmoke">
-                <!-- MDI Canvas for Child Windows -->
-                <Canvas x:Name="MdiCanvas" Background="White" ClipToBounds="True">
-                    <!-- Child windows will be added here dynamically -->
-                </Canvas>
-                
-                <!-- 환영 메시지 (윈도우가 없을 때만 표시) -->
-                <TextBlock x:Name="WelcomeMessage" 
-                           Text="데이터 → 데이터 가져오기를 선택하여 CSV 파일을 로드하거나&#x0a;툴바의 버튼을 클릭하여 새 차트를 생성하세요" 
-                           FontSize="18" 
-                           FontWeight="Light"
-                           HorizontalAlignment="Center" 
-                           VerticalAlignment="Center"
-                           TextAlignment="Center"
-                           Foreground="Gray"
-                           TextWrapping="Wrap"
-                           IsHitTestVisible="False"/>
-            </Grid>
+            <Canvas x:Name="MdiCanvas" Background="White" ClipToBounds="True">
+                <!-- Child windows will be added here dynamically -->
+            </Canvas>
+            
+            <!-- 환영 메시지 (윈도우가 없을 때만 표시) -->
+            <TextBlock x:Name="WelcomeMessage" 
+                       Text="데이터 → 데이터 가져오기를 선택하여 CSV 파일을 로드하거나&#x0a;툴바의 버튼을 클릭하여 새 차트를 생성하세요" 
+                       FontSize="18" 
+                       FontWeight="Light"
+                       HorizontalAlignment="Center" 
+                       VerticalAlignment="Center"
+                       TextAlignment="Center"
+                       Foreground="Gray"
+                       TextWrapping="Wrap"
+                       IsHitTestVisible="False"/>
         </Grid>
 
         <!-- 상태바 -->

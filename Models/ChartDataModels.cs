@@ -154,7 +154,7 @@ namespace MGK_Analyzer.Models
 
         // 압축된 데이터 저장
         public float[] Values { get; set; }
-        public byte[] BitValues { get; set; }
+        public System.Collections.BitArray BitValues { get; set; }
 
         public string DisplayName => $"{Name} ({Unit})";
 
@@ -163,50 +163,23 @@ namespace MGK_Analyzer.Models
         {
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
         }
-    }
 
-    /// <summary>
-    /// 차트 데이터 포인트
-    /// </summary>
-    public class ChartDataPoint
-    {
-        public DateTime Time { get; set; }
-        public double Value { get; set; }
-        public string SeriesName { get; set; }
-    }
-
-    /// <summary>
-    /// 차트용 시리즈
-    /// </summary>
-    public class ChartSeriesViewModel : INotifyPropertyChanged
-    {
-        private bool _isSelected;
-        private SeriesData _seriesData;
-
-        public SeriesData SeriesData
+        public IEnumerable<ChartDataPoint> GetCoupledData(SeriesData timeData, DateTime baseTime)
         {
-            get => _seriesData;
-            set { _seriesData = value; OnPropertyChanged(); OnPropertyChanged(nameof(DisplayName)); }
-        }
-
-        public bool IsSelected
-        {
-            get => _isSelected;
-            set 
-            { 
-                _isSelected = value;
-                if (SeriesData != null)
-                    SeriesData.IsVisible = value;
-                OnPropertyChanged();
+            var dataPoints = new List<ChartDataPoint>();
+            if (timeData == null || timeData.Values == null || Values == null)
+            {
+                return dataPoints;
             }
-        }
 
-        public string DisplayName => SeriesData?.DisplayName ?? "";
+            int count = Math.Min(Values.Length, timeData.Values.Length);
 
-        public event PropertyChangedEventHandler PropertyChanged;
-        protected virtual void OnPropertyChanged([CallerMemberName] string propertyName = null)
-        {
-            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+            for (int i = 0; i < count; i++)
+            {
+                DateTime xValue = baseTime.AddSeconds(timeData.Values[i]);
+                dataPoints.Add(new ChartDataPoint(xValue, Values[i]) { SeriesName = Name });
+            }
+            return dataPoints;
         }
     }
 }

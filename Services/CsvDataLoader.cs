@@ -64,22 +64,78 @@ namespace MGK_Analyzer.Services
 
                 using (reader)
                 {
-                    // 헤더 정보 읽기
+                    // 헤더 및 메타 정보 읽기 (# 로 시작하는 메타 라인 스킵)
                     using var headerTimer = PerformanceLogger.Instance.StartTimer("헤더 정보 읽기", "CSV_Loading");
-                    var headersLine = await reader.ReadLineAsync();
-                    var dataTypesLine = await reader.ReadLineAsync();
-                    var unitsLine = await reader.ReadLineAsync();
 
-                    if (string.IsNullOrEmpty(headersLine) || string.IsNullOrEmpty(dataTypesLine) || string.IsNullOrEmpty(unitsLine))
+                    var meta = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                    var nonMetaLines = new List<string>(3);
+                    string line;
+
+                    while (nonMetaLines.Count < 3 && (line = await reader.ReadLineAsync()) != null)
                     {
-                        throw new InvalidDataException("CSV 파일의 헤더 정보가 올바르지 않습니다. 3행의 헤더가 필요합니다.");
+                        if (string.IsNullOrWhiteSpace(line))
+                            continue;
+
+                        if (line.StartsWith("#"))
+                        {
+                            // 메타 라인 파싱 (#KEY:VALUE 또는 #KEY: VALUE)
+                            var content = line.Substring(1).Trim();
+                            var parts = content.Split(new[] { ':', ' ' }, 2, StringSplitOptions.RemoveEmptyEntries);
+                            if (parts.Length >= 1)
+                            {
+                                var key = parts[0].Trim().ToUpperInvariant();
+                                var value = parts.Length > 1 ? parts[1].Trim() : string.Empty;
+                                meta[key] = value;
+                            }
+                            continue;
+                        }
+
+                        nonMetaLines.Add(line);
                     }
+
+                    if (nonMetaLines.Count < 3)
+                    {
+                        throw new InvalidDataException("CSV 파일의 헤더 정보가 올바르지 않습니다. 메타라인 후 3행의 헤더가 필요합니다.");
+                    }
+
+                    var headersLine = nonMetaLines[0];
+                    var dataTypesLine = nonMetaLines[1];
+                    var unitsLine = nonMetaLines[2];
 
                     var headers = headersLine.Split(',');
                     var dataTypes = dataTypesLine.Split(',');
                     var units = unitsLine.Split(',');
-                    
-                    PerformanceLogger.Instance.LogInfo($"헤더 파싱 완료 - 컬럼 수: {headers.Length}", "CSV_Loading");
+
+                    PerformanceLogger.Instance.LogInfo($"헤더 및 메타 파싱 완료 - 컬럼 수: {headers.Length}", "CSV_Loading");
+
+                    // TYPE 메타 확인 (정격시험은 0 이어야 함)
+                    if (meta.TryGetValue("TYPE", out var typeVal))
+                    {
+                        if (!string.Equals(typeVal.Trim(), "0", StringComparison.Ordinal))
+                        {
+                            PerformanceLogger.Instance.LogError($"CSV META TYPE 불일치: {typeVal} (정격시험은 0이어야 합니다)", "CSV_Loading");
+                            throw new InvalidDataException($"CSV META TYPE 불일치: {typeVal} (정격시험은 0이어야 합니다)");
+                        }
+                        else
+                        {
+                            PerformanceLogger.Instance.LogInfo("CSV META TYPE 확인: 0 (정격시험)", "CSV_Loading");
+                        }
+                    }
+
+                    // DATE 메타가 있으면 기본 시간으로 설정
+                    if (meta.TryGetValue("DATE", out var dateVal) && !string.IsNullOrWhiteSpace(dateVal))
+                    {
+                        if (DateTime.TryParse(dateVal, out var parsedDate))
+                        {
+                            dataSet.BaseTime = parsedDate;
+                            PerformanceLogger.Instance.LogInfo($"CSV META DATE 파싱 성공: {parsedDate}", "CSV_Loading");
+                        }
+                        else
+                        {
+                            PerformanceLogger.Instance.LogInfo($"CSV META DATE 파싱 실패 (무시): {dateVal}", "CSV_Loading");
+                        }
+                    }
+
                     headerTimer.Dispose();
 
                     progress?.Report(10);
@@ -88,7 +144,8 @@ namespace MGK_Analyzer.Services
                     int estimatedRows;
                     using (var estimateTimer = PerformanceLogger.Instance.StartTimer("행 수 추정", "CSV_Loading"))
                     {
-                        estimatedRows = await EstimateRowCountAsync(reader, fileSizeMB);
+                        // Use a separate reader for sampling so we don't disturb the main reader's buffer/position
+                        estimatedRows = await EstimateRowCountAsync(filePath, fileSizeMB);
                         PerformanceLogger.Instance.LogInfo($"추정 행 수: {estimatedRows:N0}", "CSV_Loading");
                     }
                     progress?.Report(15);
@@ -114,7 +171,7 @@ namespace MGK_Analyzer.Services
                                 Unit = unitName,
                                 DataType = typeName == "bit" ? typeof(bool) : typeof(double),
                                 Values = new float[estimatedRows],
-                                BitValues = typeName == "bit" ? new byte[(estimatedRows + 7) / 8] : null,
+                                BitValues = typeName == "bit" ? new System.Collections.BitArray(estimatedRows) : null,
                                 Color = DefaultColors[colorIndex % DefaultColors.Length],
                                 IsVisible = false
                             };
@@ -167,39 +224,35 @@ namespace MGK_Analyzer.Services
             }
         }
 
-        private async Task<int> EstimateRowCountAsync(StreamReader reader, double fileSizeMB)
+        private async Task<int> EstimateRowCountAsync(string filePath, double fileSizeMB)
         {
-            var currentPosition = reader.BaseStream.Position;
-            
-            // 더 많은 샘플로 정확도 향상
+            // Create a short-lived reader for sampling so the main reader state is not disturbed.
             var sampleLines = 0;
             var totalBytes = 0;
-            const int SAMPLE_SIZE = 50; // 10 -> 50으로 증가
-            
-            for (int i = 0; i < SAMPLE_SIZE && !reader.EndOfStream; i++)
+            const int SAMPLE_SIZE = 50;
+
+            using (var fs = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read))
+            using (var sampleReader = new StreamReader(fs, Encoding.UTF8, true, 1024 * 1024))
             {
-                var line = await reader.ReadLineAsync();
-                if (!string.IsNullOrEmpty(line))
+                for (int i = 0; i < SAMPLE_SIZE && !sampleReader.EndOfStream; i++)
                 {
-                    totalBytes += Encoding.UTF8.GetByteCount(line) + 2; // \r\n
-                    sampleLines++;
+                    var line = await sampleReader.ReadLineAsync();
+                    if (!string.IsNullOrEmpty(line))
+                    {
+                        totalBytes += Encoding.UTF8.GetByteCount(line) + 2; // rough CRLF
+                        sampleLines++;
+                    }
                 }
             }
-            
-            // 원래 위치로 복원
-            reader.BaseStream.Position = currentPosition;
-            reader.DiscardBufferedData();
-            
+
             if (sampleLines > 0)
             {
                 var avgLineBytes = (double)totalBytes / sampleLines;
                 var estimatedRows = (int)(fileSizeMB * 1024 * 1024 / avgLineBytes);
-                
-                // 10% 여유분 추가 (배열 재할당 방지)
                 return (int)(estimatedRows * 1.1);
             }
-            
-            return (int)(fileSizeMB * 1000); // 기본 추정치
+
+            return (int)(fileSizeMB * 1000);
         }
 
         private async Task<int> LoadDataStreamingAsync(StreamReader reader, string[] headers, 
@@ -216,34 +269,76 @@ namespace MGK_Analyzer.Services
             var charBuffer = new char[BUFFER_SIZE];
             var stringBuilder = new StringBuilder(BUFFER_SIZE);
             
-            // 첫 번째 라인에서 시간 정보 설정
+            // 첫 번째 및 두 번째 라인에서 시간 정보 설정 (메타 BaseTime 우선)
             var firstLine = await reader.ReadLineAsync();
             if (!string.IsNullOrEmpty(firstLine))
             {
+                PerformanceLogger.Instance.LogInfo($"첫 데이터 라인(원시): {firstLine?.Length} chars - {firstLine?.Substring(0, Math.Min(200, firstLine.Length))}", "CSV_Loading");
+
                 var firstValues = firstLine.Split(',');
-                
-                if (DateTime.TryParse(firstValues[0]?.Trim(), out var baseTime))
+
+                // Try parse first field as DateTime
+                if (DateTime.TryParse(firstValues[0]?.Trim(), out var parsedDateTime))
                 {
-                    dataSet.BaseTime = baseTime;
+                    dataSet.BaseTime = parsedDateTime;
                 }
                 else
                 {
-                    dataSet.BaseTime = DateTime.Today;
+                    // If BaseTime already set from META, keep it. Otherwise default to today.
+                    if (dataSet.BaseTime == default)
+                        dataSet.BaseTime = DateTime.Today;
                 }
-                
-                if (firstValues.Length > 1 && double.TryParse(firstValues[1]?.Trim(), out var interval))
+
+                // Attempt to read second line to compute interval when relative numeric times are used
+                var secondLine = await reader.ReadLineAsync();
+                PerformanceLogger.Instance.LogInfo($"두번째 데이터 라인(원시): {(secondLine == null ? "<null>" : secondLine.Length + " chars")}", "CSV_Loading");
+                if (!string.IsNullOrEmpty(secondLine))
                 {
-                    var safeInterval = Math.Max(0.001, Math.Min(3600.0, Math.Abs(interval)));
-                    dataSet.TimeInterval = (float)safeInterval;
+                    PerformanceLogger.Instance.LogInfo($"두번째 데이터 라인 샘플: {secondLine.Substring(0, Math.Min(200, secondLine.Length))}", "CSV_Loading");
+                    var secondValues = secondLine.Split(',');
+
+                    // If both first fields are numeric, compute interval
+                    if (double.TryParse(firstValues[0]?.Trim(), NumberStyles.Any, CultureInfo.InvariantCulture, out var t1) &&
+                        double.TryParse(secondValues[0]?.Trim(), NumberStyles.Any, CultureInfo.InvariantCulture, out var t2))
+                    {
+                        var interval = Math.Abs(t2 - t1);
+                        var safeInterval = Math.Max(0.001, Math.Min(3600.0, interval));
+                        dataSet.TimeInterval = (float)safeInterval;
+                    }
+                    else
+                    {
+                        // fallback: try parse a possible interval field if available
+                        if (firstValues.Length > 1 && double.TryParse(firstValues[1]?.Trim(), NumberStyles.Any, CultureInfo.InvariantCulture, out var maybeInterval))
+                        {
+                            var safeInterval = Math.Max(0.001, Math.Min(3600.0, Math.Abs(maybeInterval)));
+                            dataSet.TimeInterval = (float)safeInterval;
+                        }
+                        else
+                        {
+                            dataSet.TimeInterval = 1.0f;
+                        }
+                    }
+
+                    // Process both lines
+                    ProcessSingleLine(firstLine, headers, seriesDict, 0);
+                    ProcessSingleLine(secondLine, headers, seriesDict, 1);
+                    lineCount = 2;
                 }
                 else
                 {
-                    dataSet.TimeInterval = 1.0f;
+                    // Only one line present
+                    if (firstValues.Length > 1 && double.TryParse(firstValues[1]?.Trim(), NumberStyles.Any, CultureInfo.InvariantCulture, out var maybeInterval))
+                    {
+                        dataSet.TimeInterval = (float)Math.Max(0.001, Math.Min(3600.0, Math.Abs(maybeInterval)));
+                    }
+                    else
+                    {
+                        dataSet.TimeInterval = 1.0f;
+                    }
+
+                    ProcessSingleLine(firstLine, headers, seriesDict, 0);
+                    lineCount = 1;
                 }
-                
-                // 첫 번째 라인 처리
-                ProcessSingleLine(firstLine, headers, seriesDict, 0);
-                lineCount = 1;
             }
 
             // 대용량 청크 단위로 읽기
@@ -274,6 +369,9 @@ namespace MGK_Analyzer.Services
                         }
                     }
                 }
+
+            // 디버그: 남아있는 스트림 여부 로그
+            PerformanceLogger.Instance.LogInfo($"LoadDataStreamingAsync 종료 - reader.EndOfStream: {reader.EndOfStream}", "CSV_Loading");
             }
 
             // 마지막 청크 처리
@@ -289,22 +387,13 @@ namespace MGK_Analyzer.Services
         private async Task ProcessChunkParallelAsync(List<string> lines, string[] headers, 
             Dictionary<string, SeriesData> seriesDict, int startIndex)
         {
-            // CPU 코어 수에 따른 병렬 처리
-            var coreCount = Environment.ProcessorCount;
-            var chunkSize = Math.Max(1000, lines.Count / coreCount);
-            
+            // 단순 순차 처리로 안정성 확보 (병렬 처리에서 인덱스 불일치로 데이터 누락 가능성 있음)
             await Task.Run(() =>
             {
-                Parallel.For(0, Math.Min(coreCount, (lines.Count + chunkSize - 1) / chunkSize), parallelIndex =>
+                for (int i = 0; i < lines.Count; i++)
                 {
-                    var start = parallelIndex * chunkSize;
-                    var end = Math.Min(start + chunkSize, lines.Count);
-                    
-                    for (int lineIdx = start; lineIdx < end; lineIdx++)
-                    {
-                        ProcessSingleLine(lines[lineIdx], headers, seriesDict, startIndex + lineIdx);
-                    }
-                });
+                    ProcessSingleLine(lines[i], headers, seriesDict, startIndex + i);
+                }
             });
         }
 
@@ -331,13 +420,11 @@ namespace MGK_Analyzer.Services
                 {
                     if (cellValue == "1" || cellValue.Equals("true", StringComparison.OrdinalIgnoreCase))
                     {
-                        int byteIndex = rowIndex / 8;
-                        int bitIndex = rowIndex % 8;
-                        if (byteIndex < series.BitValues.Length)
+                        if (series.BitValues != null && rowIndex < series.BitValues.Length)
                         {
                             lock (series.BitValues) // 병렬 처리를 위한 동기화
                             {
-                                series.BitValues[byteIndex] |= (byte)(1 << bitIndex);
+                                series.BitValues[rowIndex] = true;
                             }
                         }
                     }
@@ -365,8 +452,11 @@ namespace MGK_Analyzer.Services
                     
                     if (series.BitValues != null)
                     {
-                        var newBitValues = new byte[(actualSize + 7) / 8];
-                        Array.Copy(series.BitValues, newBitValues, Math.Min(series.BitValues.Length, newBitValues.Length));
+                        var newBitValues = new System.Collections.BitArray(actualSize);
+                        for (int i = 0; i < Math.Min(series.BitValues.Length, newBitValues.Length); i++)
+                        {
+                            newBitValues[i] = series.BitValues[i];
+                        }
                         series.BitValues = newBitValues;
                     }
                 }

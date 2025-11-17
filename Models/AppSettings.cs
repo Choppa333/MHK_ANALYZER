@@ -10,11 +10,6 @@ namespace MGK_Analyzer.Models
         public ThemeManager.ThemeType SelectedTheme { get; set; } = ThemeManager.ThemeType.MaterialLight;
         public bool IsFirstRun { get; set; } = true;
         
-        // 파일 탐색기 설정
-        public bool IsFileExplorerPinned { get; set; } = false;
-        public double FileExplorerWidth { get; set; } = 200;
-        public string LastFileExplorerPath { get; set; } = "";
-        
         private static readonly string SettingsPath = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
             "MGK_Analyzer",

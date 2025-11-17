@@ -26,8 +26,6 @@ namespace MGK_Analyzer
     public partial class MainWindow : Window
     {
         private AppSettings _settings;
-        private bool _isFileExplorerExpanded = false;
-        private bool _isFileExplorerPinned = false;
         private CsvDataLoader _csvLoader;
         private LogViewerWindow? _logViewerWindow;
         private int _chartWindowCount = 0;
@@ -43,7 +41,6 @@ namespace MGK_Analyzer
             
             // 설정 로드
             _settings = AppSettings.Load();
-            _isFileExplorerPinned = _settings.IsFileExplorerPinned;
             
             // 서비스 초기화
             _csvLoader = new CsvDataLoader();
@@ -58,9 +55,6 @@ namespace MGK_Analyzer
             // 저장된 테마 적용
             ThemeManager.Instance.InitializeTheme();
             
-            // 파일 탐색기 초기화
-            InitializeFileExplorer();
-            
             // MDI 매니저 초기화
             _mdiWindowManager = new MdiWindowManager(MdiCanvas);
             
@@ -72,55 +66,6 @@ namespace MGK_Analyzer
             UpdateWindowCount();
             
             PerformanceLogger.Instance.LogInfo("MainWindow 초기화 완료", "Application");
-        }
-
-        private void InitializeFileExplorer()
-        {
-            try
-            {
-                // 파일 트리뷰 초기화
-                FileExplorerService.Instance.PopulateTreeView(FileTreeView);
-                
-                // 저장된 설정 복원
-                if (_settings.FileExplorerWidth > 0)
-                {
-                    // 애니메이션 타겟 너비 업데이트
-                    UpdateAnimationTargetWidth(_settings.FileExplorerWidth);
-                }
-                
-                PinButton.IsChecked = _isFileExplorerPinned;
-                
-                if (_isFileExplorerPinned)
-                {
-                    ExpandFileExplorer(false); // 애니메이션 없이 확장
-                }
-                else
-                {
-                    // 초기 상태는 숨김
-                    FileExplorerPanel.Width = 0;
-                    FileExplorerTab.Visibility = Visibility.Visible;
-                }
-            }
-            catch (Exception ex)
-            {
-                UpdateStatusBar($"파일 탐색기 초기화 오류: {ex.Message}");
-            }
-        }
-
-        private void UpdateAnimationTargetWidth(double width)
-        {
-            var slideInStoryboard = FindResource("SlideInStoryboard") as Storyboard;
-            var slideOutStoryboard = FindResource("SlideOutStoryboard") as Storyboard;
-            
-            if (slideInStoryboard?.Children[0] is DoubleAnimation slideInAnimation)
-            {
-                slideInAnimation.To = width;
-            }
-            
-            if (slideOutStoryboard?.Children[0] is DoubleAnimation slideOutAnimation)
-            {
-                slideOutAnimation.From = width;
-            }
         }
 
         private void OnThemeChanged(object? sender, ThemeManager.ThemeType newTheme)
@@ -143,198 +88,6 @@ namespace MGK_Analyzer
                 // StatusText를 찾을 수 없는 경우 무시
             }
         }
-
-        #region 파일 탐색기 이벤트 핸들러
-
-        private void FileExplorerTab_MouseEnter(object sender, MouseEventArgs e)
-        {
-            if (!_isFileExplorerExpanded && !_isFileExplorerPinned)
-            {
-                ExpandFileExplorer(true);
-                UpdateStatusBar("파일 탐색기를 열었습니다.");
-            }
-        }
-
-        private void FileExplorerTab_MouseDown(object sender, MouseButtonEventArgs e)
-        {
-            if (!_isFileExplorerExpanded)
-            {
-                ExpandFileExplorer(true);
-                UpdateStatusBar("파일 탐색기를 열었습니다.");
-            }
-        }
-
-        private void FileExplorerPanel_MouseLeave(object sender, MouseEventArgs e)
-        {
-            // 마우스가 완전히 패널을 벗어났는지 확인
-            var position = e.GetPosition(FileExplorerPanel);
-            var bounds = new Rect(0, 0, FileExplorerPanel.ActualWidth, FileExplorerPanel.ActualHeight);
-            
-            if (_isFileExplorerExpanded && !_isFileExplorerPinned && !bounds.Contains(position))
-            {
-                // 약간의 지연을 두어 실수로 닫히는 것을 방지
-                var timer = new System.Windows.Threading.DispatcherTimer();
-                timer.Interval = TimeSpan.FromMilliseconds(300);
-                timer.Tick += (s, args) =>
-                {
-                    timer.Stop();
-                    if (!_isFileExplorerPinned && !FileExplorerPanel.IsMouseOver)
-                    {
-                        CollapseFileExplorer(true);
-                        UpdateStatusBar("파일 탐색기를 닫았습니다.");
-                    }
-                };
-                timer.Start();
-            }
-        }
-
-        private void PinButton_Checked(object sender, RoutedEventArgs e)
-        {
-            _isFileExplorerPinned = true;
-            _settings.IsFileExplorerPinned = true;
-            _settings.Save();
-            
-            if (!_isFileExplorerExpanded)
-            {
-                ExpandFileExplorer(true);
-            }
-            
-            // GridSplitter 활성화
-            EnableGridSplitter();
-            
-            UpdateStatusBar("파일 탐색기가 고정되었습니다.");
-        }
-
-        private void PinButton_Unchecked(object sender, RoutedEventArgs e)
-        {
-            _isFileExplorerPinned = false;
-            _settings.IsFileExplorerPinned = false;
-            _settings.Save();
-            
-            // GridSplitter 비활성화
-            DisableGridSplitter();
-            
-            UpdateStatusBar("파일 탐색기 고정이 해제되었습니다.");
-        }
-
-        private void EnableGridSplitter()
-        {
-            // 파일 탐색기 컬럼을 고정 너비로 설정
-            var currentWidth = Math.Max(200, FileExplorerPanel.ActualWidth + 25); // 탭 너비 포함
-            
-            var parentGrid = (Grid)FileExplorerContainer.Parent;
-            if (parentGrid != null)
-            {
-                parentGrid.ColumnDefinitions[0].Width = new GridLength(currentWidth);
-                
-                // GridSplitter 활성화
-                FileExplorerSplitter.Visibility = Visibility.Visible;
-                FileExplorerSplitter.IsEnabled = true;
-            }
-        }
-
-        private void DisableGridSplitter()
-        {
-            // 컬럼을 Auto로 되돌리기
-            var parentGrid = (Grid)FileExplorerContainer.Parent;
-            if (parentGrid != null)
-            {
-                parentGrid.ColumnDefinitions[0].Width = GridLength.Auto;
-                
-                // GridSplitter 비활성화
-                FileExplorerSplitter.Visibility = Visibility.Collapsed;
-                FileExplorerSplitter.IsEnabled = false;
-            }
-        }
-
-        private void ExpandFileExplorer(bool animated)
-        {
-            _isFileExplorerExpanded = true;
-            
-            // 화면 너비의 20%로 설정 (최소 200, 최대 400)
-            var targetWidth = Math.Max(200, Math.Min(400, this.ActualWidth * 0.2));
-            
-            // 저장된 너비가 있으면 사용
-            if (_settings.FileExplorerWidth > 0)
-            {
-                targetWidth = _settings.FileExplorerWidth;
-            }
-            
-            if (animated)
-            {
-                UpdateAnimationTargetWidth(targetWidth);
-                var storyboard = FindResource("SlideInStoryboard") as Storyboard;
-                if (storyboard != null)
-                {
-                    storyboard.Completed += (s, e) =>
-                    {
-                        // 애니메이션 완료 후 GridSplitter 활성화
-                        if (_isFileExplorerPinned)
-                        {
-                            EnableGridSplitter();
-                        }
-                    };
-                    storyboard.Begin();
-                }
-            }
-            else
-            {
-                FileExplorerPanel.Width = targetWidth;
-                if (_isFileExplorerPinned)
-                {
-                    EnableGridSplitter();
-                }
-            }
-            
-            // 탭 숨기기
-            FileExplorerTab.Visibility = Visibility.Collapsed;
-        }
-
-        private void CollapseFileExplorer(bool animated)
-        {
-            _isFileExplorerExpanded = false;
-            
-            // 현재 너비 저장 (GridSplitter에 의해 변경된 경우)
-            var parentGrid = (Grid)FileExplorerContainer.Parent;
-            if (parentGrid != null && parentGrid.ColumnDefinitions[0].Width.IsAbsolute)
-            {
-                _settings.FileExplorerWidth = parentGrid.ColumnDefinitions[0].Width.Value - 25; // 탭 너비 제외
-                _settings.Save();
-            }
-            else if (FileExplorerPanel.ActualWidth > 0)
-            {
-                _settings.FileExplorerWidth = FileExplorerPanel.ActualWidth;
-                _settings.Save();
-            }
-            
-            // GridSplitter 비활성화
-            DisableGridSplitter();
-            
-            if (animated)
-            {
-                var storyboard = FindResource("SlideOutStoryboard") as Storyboard;
-                if (storyboard != null)
-                {
-                    var animation = storyboard.Children[0] as DoubleAnimation;
-                    if (animation != null)
-                    {
-                        animation.From = FileExplorerPanel.ActualWidth;
-                    }
-                    storyboard.Completed += (s, e) => 
-                    {
-                        FileExplorerTab.Visibility = Visibility.Visible;
-                    };
-                    storyboard.Begin();
-                }
-            }
-            else
-            {
-                FileExplorerPanel.Width = 0;
-                FileExplorerTab.Visibility = Visibility.Visible;
-            }
-        }
-
-        #endregion
 
         #region 기존 메뉴 이벤트 핸들러
 
@@ -437,7 +190,7 @@ namespace MGK_Analyzer
                         }
                     }
 
-                    // 진행률 표시를 위한 프로그레스 핸들러
+                    // 진행률 표시를 위한 프로그레서 핸들러
                     var progress = new Progress<int>(percent =>
                     {
                         var statusMessage = fileSizeMB > 5 
@@ -445,9 +198,6 @@ namespace MGK_Analyzer
                             : $"CSV 파일 로딩 중... {percent}%";
                         UpdateStatusBar(statusMessage);
                     });
-
-                    // 버튼 비활성화
-                    ImportButton.IsEnabled = false;
 
                     // CSV 파일 로딩 (비동기)
                     MemoryOptimizedDataSet dataSet;
@@ -482,8 +232,7 @@ namespace MGK_Analyzer
                 }
                 finally
                 {
-                    // 버튼 활성화
-                    ImportButton.IsEnabled = true;
+                    // 삭제된 ImportButton 관련 복구 코드 제거
                 }
             }
             else
@@ -593,7 +342,7 @@ namespace MGK_Analyzer
 
         #region 시험 유형 이벤트 핸들러
 
-        private void StandardTest_Click(object sender, RoutedEventArgs e)
+        private async void StandardTest_Click(object sender, RoutedEventArgs e)
         {
             try
             {
@@ -602,100 +351,46 @@ namespace MGK_Analyzer
                     UpdateStatusBar("MDI 초기화가 완료되지 않았습니다.");
                     return;
                 }
-                UpdateStatusBar("일반시험 차트를 생성하고 있습니다...");
-                PerformanceLogger.Instance.LogInfo("일반시험 모드 선택", "TestMode");
                 
-                // 샘플 차트 데이터 생성
-                var sampleDataSet = CreateStandardTestSampleData();
-                
-                // 차트 윈도우 생성
-                var mdi = _mdiWindowManager.CreateChartWindow("일반시험 - " + DateTime.Now.ToString("HH:mm:ss"), sampleDataSet);
-                mdi.WindowClosed += (s, args) => UpdateWindowCount();
-                
-                UpdateStatusBar($"일반시험 차트가 생성되었습니다. (샘플 데이터: {sampleDataSet.TotalSamples}개)");
-                PerformanceLogger.Instance.LogInfo("일반시험 차트 생성 완료", "TestMode");
-                UpdateWindowCount();
-                
-                // 환영 메시지 숨기기
-                WelcomeMessage.Visibility = Visibility.Collapsed;
+                var openFileDialog = new Microsoft.Win32.OpenFileDialog
+                {
+                    Filter = "CSV 파일 (*.csv)|*.csv|모든 파일 (*.*)|*.*",
+                    Title = "정격시험 데이터 파일 선택"
+                };
+
+                if (openFileDialog.ShowDialog() == true)
+                {
+                    UpdateStatusBar($"정격시험 데이터 파일을 로딩하고 있습니다: {System.IO.Path.GetFileName(openFileDialog.FileName)}");
+                    PerformanceLogger.Instance.LogInfo($"정격시험 데이터 파일 선택: {openFileDialog.FileName}", "TestMode");
+                    
+                    WelcomeMessage.Visibility = Visibility.Collapsed;
+
+                    var progress = new Progress<int>(percent =>
+                    {
+                        UpdateStatusBar($"CSV 파일 로딩 중... {percent}%");
+                    });
+
+                    var dataSet = await _csvLoader.LoadCsvDataAsync(openFileDialog.FileName, progress);
+
+                    var chartWindow = new MdiChartWindow
+                    {
+                        WindowTitle = $"정격시험: {dataSet.FileName}",
+                        DataSet = dataSet
+                    };
+                    chartWindow.WindowClosed += (s, args) => UpdateWindowCount();
+                    _mdiWindowManager.AddWindow(chartWindow);
+                }
+                else
+                {
+                    UpdateStatusBar("정격시험 데이터 파일 선택이 취소되었습니다.");
+                }
             }
             catch (Exception ex)
             {
-                PerformanceLogger.Instance.LogError($"일반시험 모드 오류: {ex.Message}", "TestMode");
-                MessageBox.Show($"일반시험 차트 생성 중 오류 발생:\n{ex.Message}", 
+                PerformanceLogger.Instance.LogError($"정격시험 모드 오류: {ex.Message}", "TestMode");
+                MessageBox.Show($"정격시험 모드에서 오류 발생:\n{ex.Message}", 
                               "오류", MessageBoxButton.OK, MessageBoxImage.Error);
             }
-        }
-        
-        private MemoryOptimizedDataSet CreateStandardTestSampleData()
-        {
-            var dataSet = new MemoryOptimizedDataSet
-            {
-                FileName = "일반시험 샘플 데이터",
-                BaseTime = DateTime.Now.AddSeconds(-100),
-                TimeInterval = 0.1f, // 0.1초 간격
-                TotalSamples = 1000
-            };
-            
-            // 전압 시리즈 (사인파)
-            var voltageSeries = new SeriesData
-            {
-                Name = "전압",
-                Unit = "V",
-                DataType = typeof(double),
-                Color = new SolidColorBrush(Colors.Blue),
-                IsVisible = true
-            };
-            voltageSeries.Values = new float[1000];
-            for (int i = 0; i < 1000; i++)
-            {
-                voltageSeries.Values[i] = (float)(220 + 10 * Math.Sin(i * 0.1));
-            }
-            voltageSeries.MinValue = voltageSeries.Values.Min();
-            voltageSeries.MaxValue = voltageSeries.Values.Max();
-            voltageSeries.AvgValue = voltageSeries.Values.Average();
-            
-            // 전류 시리즈 (코사인파)
-            var currentSeries = new SeriesData
-            {
-                Name = "전류",
-                Unit = "A",
-                DataType = typeof(double),
-                Color = new SolidColorBrush(Colors.Red),
-                IsVisible = true
-            };
-            currentSeries.Values = new float[1000];
-            for (int i = 0; i < 1000; i++)
-            {
-                currentSeries.Values[i] = (float)(10 + 2 * Math.Cos(i * 0.1));
-            }
-            currentSeries.MinValue = currentSeries.Values.Min();
-            currentSeries.MaxValue = currentSeries.Values.Max();
-            currentSeries.AvgValue = currentSeries.Values.Average();
-            
-            // 온도 시리즈 (선형 증가)
-            var tempSeries = new SeriesData
-            {
-                Name = "온도",
-                Unit = "°C",
-                DataType = typeof(double),
-                Color = new SolidColorBrush(Colors.Orange),
-                IsVisible = true
-            };
-            tempSeries.Values = new float[1000];
-            for (int i = 0; i < 1000; i++)
-            {
-                tempSeries.Values[i] = (float)(25 + i * 0.05 + Math.Sin(i * 0.3) * 2);
-            }
-            tempSeries.MinValue = tempSeries.Values.Min();
-            tempSeries.MaxValue = tempSeries.Values.Max();
-            tempSeries.AvgValue = tempSeries.Values.Average();
-            
-            dataSet.SeriesData.Add(voltageSeries.Name, voltageSeries);
-            dataSet.SeriesData.Add(currentSeries.Name, currentSeries);
-            dataSet.SeriesData.Add(tempSeries.Name, tempSeries);
-            
-            return dataSet;
         }
 
         private void LoadTest_Click(object sender, RoutedEventArgs e)
@@ -707,101 +402,35 @@ namespace MGK_Analyzer
                     UpdateStatusBar("MDI 초기화가 완료되지 않았습니다.");
                     return;
                 }
-                UpdateStatusBar("부하시험 차트를 생성하고 있습니다...");
-                PerformanceLogger.Instance.LogInfo("부하시험 모드 선택", "TestMode");
                 
-                // 부하시험 샘플 데이터 생성
-                var sampleDataSet = CreateLoadTestSampleData();
-                
-                // 차트 윈도우 생성
-                var mdi = _mdiWindowManager.CreateChartWindow("부하시험 - " + DateTime.Now.ToString("HH:mm:ss"), sampleDataSet);
-                mdi.WindowClosed += (s, args) => UpdateWindowCount();
-                
-                UpdateStatusBar($"부하시험 차트가 생성되었습니다. (샘플 데이터: {sampleDataSet.TotalSamples}개)");
-                PerformanceLogger.Instance.LogInfo("부하시험 차트 생성 완료", "TestMode");
-                UpdateWindowCount();
-                
-                WelcomeMessage.Visibility = Visibility.Collapsed;
+                var openFileDialog = new Microsoft.Win32.OpenFileDialog
+                {
+                    Filter = "CSV 파일 (*.csv)|*.csv|모든 파일 (*.*)|*.*",
+                    Title = "부하시험 데이터 파일 선택"
+                };
+
+                if (openFileDialog.ShowDialog() == true)
+                {
+                    // 파일 선택 완료 - 여기까지 진행
+                    UpdateStatusBar($"부하시험 데이터 파일이 선택되었습니다: {System.IO.Path.GetFileName(openFileDialog.FileName)}");
+                    PerformanceLogger.Instance.LogInfo($"부하시험 데이터 파일 선택: {openFileDialog.FileName}", "TestMode");
+                    
+                    // 다음 단계는 별도 구현 예정
+                    return;
+                }
+                else
+                {
+                    UpdateStatusBar("부하시험 데이터 파일 선택이 취소되었습니다.");
+                }
             }
             catch (Exception ex)
             {
                 PerformanceLogger.Instance.LogError($"부하시험 모드 오류: {ex.Message}", "TestMode");
-                MessageBox.Show($"부하시험 차트 생성 중 오류 발생:\n{ex.Message}", 
+                MessageBox.Show($"부하시험 모드에서 오류 발생:\n{ex.Message}", 
                               "오류", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
         
-        private MemoryOptimizedDataSet CreateLoadTestSampleData()
-        {
-            var dataSet = new MemoryOptimizedDataSet
-            {
-                FileName = "부하시험 샘플 데이터",
-                BaseTime = DateTime.Now.AddSeconds(-100),
-                TimeInterval = 0.1f,
-                TotalSamples = 1000
-            };
-            
-            // 부하 전류 (증가하는 패턴)
-            var loadCurrentSeries = new SeriesData
-            {
-                Name = "부하전류",
-                Unit = "A",
-                DataType = typeof(double),
-                Color = new SolidColorBrush(Colors.DarkRed),
-                IsVisible = true
-            };
-            loadCurrentSeries.Values = new float[1000];
-            for (int i = 0; i < 1000; i++)
-            {
-                loadCurrentSeries.Values[i] = (float)(5 + i * 0.02 + Math.Sin(i * 0.2) * 3);
-            }
-            loadCurrentSeries.MinValue = loadCurrentSeries.Values.Min();
-            loadCurrentSeries.MaxValue = loadCurrentSeries.Values.Max();
-            loadCurrentSeries.AvgValue = loadCurrentSeries.Values.Average();
-            
-            // 부하 전압 (감소하는 패턴)
-            var loadVoltageSeries = new SeriesData
-            {
-                Name = "부하전압",
-                Unit = "V",
-                DataType = typeof(double),
-                Color = new SolidColorBrush(Colors.DarkBlue),
-                IsVisible = true
-            };
-            loadVoltageSeries.Values = new float[1000];
-            for (int i = 0; i < 1000; i++)
-            {
-                loadVoltageSeries.Values[i] = (float)(230 - i * 0.01 + Math.Cos(i * 0.15) * 5);
-            }
-            loadVoltageSeries.MinValue = loadVoltageSeries.Values.Min();
-            loadVoltageSeries.MaxValue = loadVoltageSeries.Values.Max();
-            loadVoltageSeries.AvgValue = loadVoltageSeries.Values.Average();
-            
-            // 부하율
-            var loadRateSeries = new SeriesData
-            {
-                Name = "부하율",
-                Unit = "%",
-                DataType = typeof(double),
-                Color = new SolidColorBrush(Colors.Green),
-                IsVisible = true
-            };
-            loadRateSeries.Values = new float[1000];
-            for (int i = 0; i < 1000; i++)
-            {
-                loadRateSeries.Values[i] = (float)(50 + i * 0.03 + Math.Sin(i * 0.1) * 10);
-            }
-            loadRateSeries.MinValue = loadRateSeries.Values.Min();
-            loadRateSeries.MaxValue = loadRateSeries.Values.Max();
-            loadRateSeries.AvgValue = loadRateSeries.Values.Average();
-            
-            dataSet.SeriesData.Add(loadCurrentSeries.Name, loadCurrentSeries);
-            dataSet.SeriesData.Add(loadVoltageSeries.Name, loadVoltageSeries);
-            dataSet.SeriesData.Add(loadRateSeries.Name, loadRateSeries);
-            
-            return dataSet;
-        }
-
         private void NoLoadTest_Click(object sender, RoutedEventArgs e)
         {
             try
@@ -811,105 +440,141 @@ namespace MGK_Analyzer
                     UpdateStatusBar("MDI 초기화가 완료되지 않았습니다.");
                     return;
                 }
-                UpdateStatusBar("무부하시험 차트를 생성하고 있습니다...");
-                PerformanceLogger.Instance.LogInfo("무부하시험 모드 선택", "TestMode");
                 
-                // 무부하시험 샘플 데이터 생성
-                var sampleDataSet = CreateNoLoadTestSampleData();
+                var openFileDialog = new Microsoft.Win32.OpenFileDialog
+                {
+                    Filter = "CSV 파일 (*.csv)|*.csv|모든 파일 (*.*)|*.*",
+                    Title = "무부하시험 데이터 파일 선택"
+                };
+
+                if (openFileDialog.ShowDialog() == true)
+                {
+                    // 파일 선택 완료 - 여기까지 진행
+                    UpdateStatusBar($"무부하시험 데이터 파일이 선택되었습니다: {System.IO.Path.GetFileName(openFileDialog.FileName)}");
+                    PerformanceLogger.Instance.LogInfo($"무부하시험 데이터 파일 선택: {openFileDialog.FileName}", "TestMode");
+                    
+                    // 다음 단계는 별도 구현 예정
+                    return;
+                }
+                else
+                {
+                    UpdateStatusBar("무부하시험 데이터 파일 선택이 취소되었습니다.");
+                }
+            }
+            catch (Exception ex)
+            {
+                PerformanceLogger.Instance.LogError($"무부하시험 모드 오류: {ex.Message}", "TestMode");
+                MessageBox.Show($"무부하시험 모드에서 오류 발생:\n{ex.Message}", 
+                              "오류", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+        
+        private MemoryOptimizedDataSet CreateNtCurveTestSampleData()
+        {
+            var dataSet = new MemoryOptimizedDataSet
+            {
+                FileName = "NT-Curve 시험 샘플 데이터",
+                BaseTime = DateTime.Now.AddSeconds(-120),
+                TimeInterval = 0.1f,
+                TotalSamples = 1200
+            };
+
+            // 토크 시리즈
+            var torqueSeries = new SeriesData
+            {
+                Name = "토크",
+                Unit = "Nm",
+                DataType = typeof(double),
+                Color = new SolidColorBrush(Colors.MediumPurple),
+                IsVisible = true
+            };
+            torqueSeries.Values = new float[1200];
+            for (int i = 0; i < 1200; i++)
+            {
+                torqueSeries.Values[i] = (float)(50 + 20 * Math.Sin(i * 0.01) + 5 * Math.Sin(i * 0.05));
+            }
+            torqueSeries.MinValue = torqueSeries.Values.Min();
+            torqueSeries.MaxValue = torqueSeries.Values.Max();
+            torqueSeries.AvgValue = torqueSeries.Values.Average();
+
+            // 속도 시리즈
+            var speedSeries = new SeriesData
+            {
+                Name = "속도",
+                Unit = "rpm",
+                DataType = typeof(double),
+                Color = new SolidColorBrush(Colors.DarkOrange),
+                IsVisible = true
+            };
+            speedSeries.Values = new float[1200];
+            for (int i = 0; i < 1200; i++)
+            {
+                speedSeries.Values[i] = (float)(1500 + 200 * Math.Cos(i * 0.01) + 50 * Math.Sin(i * 0.02));
+            }
+            speedSeries.MinValue = speedSeries.Values.Min();
+            speedSeries.MaxValue = speedSeries.Values.Max();
+            speedSeries.AvgValue = speedSeries.Values.Average();
+
+            // 효율 시리즈
+            var efficiencySeries = new SeriesData
+            {
+                Name = "효율",
+                Unit = "%",
+                DataType = typeof(double),
+                Color = new SolidColorBrush(Colors.ForestGreen),
+                IsVisible = true
+            };
+            efficiencySeries.Values = new float[1200];
+            for (int i = 0; i < 1200; i++)
+            {
+                efficiencySeries.Values[i] = (float)(85 + 5 * Math.Sin(i * 0.015) + 2 * Math.Cos(i * 0.03));
+            }
+            efficiencySeries.MinValue = efficiencySeries.Values.Min();
+            efficiencySeries.MaxValue = efficiencySeries.Values.Max();
+            efficiencySeries.AvgValue = efficiencySeries.Values.Average();
+
+            dataSet.SeriesData.Add(torqueSeries.Name, torqueSeries);
+            dataSet.SeriesData.Add(speedSeries.Name, speedSeries);
+            dataSet.SeriesData.Add(efficiencySeries.Name, efficiencySeries);
+
+            return dataSet;
+        }
+
+        private void NtCurveTest_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                if (_mdiWindowManager == null)
+                {
+                    UpdateStatusBar("MDI 초기화가 완료되지 않았습니다.");
+                    return;
+                }
+                UpdateStatusBar("NT-Curve 시험 차트를 생성하고 있습니다...");
+                PerformanceLogger.Instance.LogInfo("NT-Curve 시험 모드 선택", "TestMode");
+                
+                // NT-Curve 샘플 데이터 생성
+                var sampleDataSet = CreateNtCurveTestSampleData();
                 
                 // 차트 윈도우 생성
-                var mdi = _mdiWindowManager.CreateChartWindow("무부하시험 - " + DateTime.Now.ToString("HH:mm:ss"), sampleDataSet);
+                var mdi = _mdiWindowManager.CreateChartWindow("NT-Curve 시험 - " + DateTime.Now.ToString("HH:mm:ss"), sampleDataSet);
                 mdi.WindowClosed += (s, args) => UpdateWindowCount();
                 
-                UpdateStatusBar($"무부하시험 차트가 생성되었습니다. (샘플 데이터: {sampleDataSet.TotalSamples}개)");
-                PerformanceLogger.Instance.LogInfo("무부하시험 차트 생성 완료", "TestMode");
+                UpdateStatusBar($"NT-Curve 시험 차트가 생성되었습니다. (샘플 데이터: {sampleDataSet.TotalSamples}개)");
+                PerformanceLogger.Instance.LogInfo("NT-Curve 시험 차트 생성 완료", "TestMode");
                 UpdateWindowCount();
                 
                 WelcomeMessage.Visibility = Visibility.Collapsed;
             }
             catch (Exception ex)
             {
-                PerformanceLogger.Instance.LogError($"무부하시험 모드 오류: {ex.Message}", "TestMode");
-                MessageBox.Show($"무부하시험 차트 생성 중 오류 발생:\n{ex.Message}", 
-                              "오류", MessageBoxButton.OK, MessageBoxImage.Error);
+                PerformanceLogger.Instance.LogError($"NT-Curve 시험 모드 오류: {ex.Message}", "TestMode");
+                MessageBox.Show($"NT-Curve 시험 차트 생성 중 오류 발생:\n{ex.Message}", "오류", MessageBoxButton.OK, MessageBoxImage.Error);
             }
-        }
-        
-        private MemoryOptimizedDataSet CreateNoLoadTestSampleData()
-        {
-            var dataSet = new MemoryOptimizedDataSet
-            {
-                FileName = "무부하시험 샘플 데이터",
-                BaseTime = DateTime.Now.AddSeconds(-100),
-                TimeInterval = 0.1f,
-                TotalSamples = 1000
-            };
-            
-            // 무부하 전류 (낮고 안정적)
-            var noLoadCurrentSeries = new SeriesData
-            {
-                Name = "무부하전류",
-                Unit = "A",
-                DataType = typeof(double),
-                Color = new SolidColorBrush(Colors.LightBlue),
-                IsVisible = true
-            };
-            noLoadCurrentSeries.Values = new float[1000];
-            for (int i = 0; i < 1000; i++)
-            {
-                noLoadCurrentSeries.Values[i] = (float)(0.5 + Math.Sin(i * 0.5) * 0.1);
-            }
-            noLoadCurrentSeries.MinValue = noLoadCurrentSeries.Values.Min();
-            noLoadCurrentSeries.MaxValue = noLoadCurrentSeries.Values.Max();
-            noLoadCurrentSeries.AvgValue = noLoadCurrentSeries.Values.Average();
-            
-            // 무부하 전압 (안정적)
-            var noLoadVoltageSeries = new SeriesData
-            {
-                Name = "무부하전압",
-                Unit = "V",
-                DataType = typeof(double),
-                Color = new SolidColorBrush(Colors.SkyBlue),
-                IsVisible = true
-            };
-            noLoadVoltageSeries.Values = new float[1000];
-            for (int i = 0; i < 1000; i++)
-            {
-                noLoadVoltageSeries.Values[i] = (float)(220 + Math.Cos(i * 0.3) * 1);
-            }
-            noLoadVoltageSeries.MinValue = noLoadVoltageSeries.Values.Min();
-            noLoadVoltageSeries.MaxValue = noLoadVoltageSeries.Values.Max();
-            noLoadVoltageSeries.AvgValue = noLoadVoltageSeries.Values.Average();
-            
-            // 역률
-            var powerFactorSeries = new SeriesData
-            {
-                Name = "역률",
-                Unit = "",
-                DataType = typeof(double),
-                Color = new SolidColorBrush(Colors.Purple),
-                IsVisible = true
-            };
-            powerFactorSeries.Values = new float[1000];
-            for (int i = 0; i < 1000; i++)
-            {
-                powerFactorSeries.Values[i] = (float)(0.95 + Math.Sin(i * 0.2) * 0.03);
-            }
-            powerFactorSeries.MinValue = powerFactorSeries.Values.Min();
-            powerFactorSeries.MaxValue = powerFactorSeries.Values.Max();
-            powerFactorSeries.AvgValue = powerFactorSeries.Values.Average();
-            
-            dataSet.SeriesData.Add(noLoadCurrentSeries.Name, noLoadCurrentSeries);
-            dataSet.SeriesData.Add(noLoadVoltageSeries.Name, noLoadVoltageSeries);
-            dataSet.SeriesData.Add(powerFactorSeries.Name, powerFactorSeries);
-            
-            return dataSet;
         }
 
-        #endregion
+        #endregion // 시험 유형 이벤트 핸들러
 
         #region 윈도우 관리
-
         private void CascadeWindows_Click(object sender, RoutedEventArgs e)
         {
             if (_mdiWindowManager == null) return;
@@ -940,7 +605,6 @@ namespace MGK_Analyzer
             }
             else
             {
-                // fallback: Canvas의 자식 컨트롤 카운트
                 _chartWindowCount = 0;
                 if (MdiCanvas != null)
                 {
@@ -984,7 +648,7 @@ namespace MGK_Analyzer
             catch (Exception ex)
             {
                 PerformanceLogger.Instance.LogError($"효율맵2D 차트 생성 오류: {ex.Message}", "Contour2D");
-                MessageBox.Show($"효율맵2D 차트 생성 중 오류 발생:\n{ex.Message}",
+                MessageBox.Show($"효율맵2D 차트 생성 중 오류 발생:\n{ex.Message}", 
                               "오류", MessageBoxButton.OK, MessageBoxImage.Error);
                 UpdateStatusBar("효율맵2D 차트 생성 실패");
             }
@@ -1000,7 +664,6 @@ namespace MGK_Analyzer
                     return;
                 }
                 UpdateStatusBar("효율맵3D 차트를 생성하고 있습니다...");
-
                 var mdi = _mdiWindowManager.CreateSurface3DWindow("효율맵3D - " + DateTime.Now.ToString("HH:mm:ss"));
                 UpdateWindowCount();
                 WelcomeMessage.Visibility = Visibility.Collapsed;
@@ -1010,7 +673,6 @@ namespace MGK_Analyzer
                 MessageBox.Show($"효율맵3D 차트 생성 중 오류 발생:\n{ex.Message}", "오류", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
-
-        #endregion
+        #endregion // 윈도우 관리
     }
 }

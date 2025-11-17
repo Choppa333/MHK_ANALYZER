@@ -56,6 +56,29 @@ namespace MGK_Analyzer.Services
             return window;
         }
 
+        public void AddWindow(MdiChartWindow window)
+        {
+            var left = _windowOffset * 30;
+            var top = _windowOffset * 30;
+
+            if (left + window.Width > _mdiCanvas.ActualWidth - 50)
+                left = 20;
+            if (top + window.Height > _mdiCanvas.ActualHeight - 50)
+                top = 20;
+
+            Canvas.SetLeft(window, left);
+            Canvas.SetTop(window, top);
+            MdiZOrderService.BringToFront(window);
+
+            _mdiCanvas.Children.Add(window);
+            _windows.Add(window);
+
+            window.WindowClosed += Window_Closed;
+            window.WindowActivated += Window_Activated;
+
+            _windowOffset = (_windowOffset + 1) % 10;
+        }
+
         public MdiContour2DWindow CreateContour2DWindow(string windowTitle)
         {
             var window = new MdiContour2DWindow

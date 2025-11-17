@@ -16,6 +16,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.0" />
     <PackageReference Include="EPPlus" Version="8.2.1" />
     <PackageReference Include="Syncfusion.SfChart.WPF" Version="31.1.17" />
     <PackageReference Include="Syncfusion.SfGrid.WPF" Version="31.1.17" />
@@ -28,12 +29,28 @@
     <!-- OxyPlot packages for 2D contour map -->
     <PackageReference Include="OxyPlot.Core" Version="2.1.2" />
     <PackageReference Include="OxyPlot.Wpf" Version="2.1.2" />
+    <!-- CsvHelper for CSV parsing -->
+    <PackageReference Include="CsvHelper" Version="30.0.1" />
   </ItemGroup>
 
   <!-- Exclude sample files from build until XAML namespaces are finalized -->
   <ItemGroup>
     <Page Remove="Samples\Syncfusion\SfChartSample.xaml" />
     <Compile Remove="Samples\Syncfusion\SfChartSample.xaml.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <Folder Include="CsvSampleGenerator\" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Update="LoadCurve_Test_Sample_5000.csv">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+    <None Update="NoLoad_Test_Sample_5000.csv">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+    <None Update="Rated_Test_Sample_5000.csv">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
   </ItemGroup>
 
   <!-- Add new sample project to repo as standalone project (no direct reference here) -->

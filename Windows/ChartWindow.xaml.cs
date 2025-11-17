@@ -136,15 +136,25 @@ namespace MGK_Analyzer.Windows
                     };
 
                     var dataPoints = CreateDoubleDataPoints(series, step);
+                    PerformanceLogger.Instance.LogInfo($"샘플 데이터 포인트(처음5) for {series.Name}: count={dataPoints.Count}", "Chart_Display");
+                    int idx = 0;
+                    foreach (var dp in dataPoints)
+                    {
+                        if (idx++ >= 5) break;
+                        PerformanceLogger.Instance.LogInfo($"  DP[{idx-1}]: Time={dp.Time}, Value={dp.Value}", "Chart_Display");
+                    }
+
                     lineSeries.ItemsSource = dataPoints;
                     ChartControl.Series.Add(lineSeries);
+                    ChartControl.InvalidateVisual();
+                    ChartControl.UpdateLayout();
                     
                     PerformanceLogger.Instance.LogInfo($"Double 시리즈 추가 완료: {series.Name} ({dataPoints.Count:N0}개 포인트)", "Chart_Display");
                 }
             }
             catch (Exception ex)
             {
-                PerformanceLogger.Instance.LogError($"시리즈 추가 오류: {series.Name} - {ex.Message}", "Chart_Display");
+                PerformanceLogger.Instance.LogError($"시리즈 추가 오류: {series.Name} - {ex.Message}\n{ex}", "Chart_Display");
             }
             
             if (ChartControl.Legend is ChartLegend legend)
@@ -165,10 +175,8 @@ namespace MGK_Analyzer.Windows
             for (int i = 0; i < DataSet.TotalSamples && pointCount < 10000; i += step)
             {
                 bool value = GetBoolValue(series.BitValues, i);
-                dataPoints.Add(new ChartDataPoint
+                dataPoints.Add(new ChartDataPoint(DataSet.GetTimeAt(i), value ? 1.0 : 0.0)
                 {
-                    Time = DataSet.GetTimeAt(i),
-                    Value = value ? 1.0 : 0.0,
                     SeriesName = series.Name
                 });
                 pointCount++;
@@ -205,10 +213,8 @@ namespace MGK_Analyzer.Windows
                         continue;
                     }
                     
-                    dataPoints.Add(new ChartDataPoint
+                    dataPoints.Add(new ChartDataPoint(time, value)
                     {
-                        Time = time,
-                        Value = value,
                         SeriesName = series.Name
                     });
                     
@@ -236,12 +242,11 @@ namespace MGK_Analyzer.Windows
             }
         }
 
-        private bool GetBoolValue(byte[] bitValues, int index)
+        private bool GetBoolValue(System.Collections.BitArray? bitValues, int index)
         {
             if (bitValues == null) return false;
-            int byteIndex = index / 8;
-            int bitIndex = index % 8;
-            return byteIndex < bitValues.Length && (bitValues[byteIndex] & (1 << bitIndex)) != 0;
+            if (index < 0 || index >= bitValues.Length) return false;
+            return bitValues[index];
         }
 
         private void ExportChart_Click(object sender, RoutedEventArgs e)
