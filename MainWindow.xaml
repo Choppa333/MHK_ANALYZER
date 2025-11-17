@@ -126,50 +126,11 @@
 
         <!-- 툴바 -->
         <ToolBar Grid.Row="1" Background="White" BorderBrush="LightGray" BorderThickness="0,0,0,1">
-            <Button x:Name="NewButton" Click="NewFile_Click" ToolTip="새로 만들기">
-                <StackPanel Orientation="Horizontal">
-                    <Path Data="{StaticResource NewFileIcon}" Style="{StaticResource ToolbarIconStyle}" Fill="DodgerBlue"/>
-                    <TextBlock Text="새로만들기" Margin="5,0" VerticalAlignment="Center"/>
-                </StackPanel>
-            </Button>
-            
-            <Button x:Name="OpenButton" Click="OpenFile_Click" ToolTip="열기">
-                <StackPanel Orientation="Horizontal">
-                    <Path Data="{StaticResource OpenFileIcon}" Style="{StaticResource ToolbarIconStyle}" Fill="ForestGreen"/>
-                    <TextBlock Text="열기" Margin="5,0" VerticalAlignment="Center"/>
-                </StackPanel>
-            </Button>
-            
-            <Button x:Name="SaveButton" Click="SaveFile_Click" ToolTip="저장">
-                <StackPanel Orientation="Horizontal">
-                    <Path Data="{StaticResource SaveIcon}" Style="{StaticResource ToolbarIconStyle}" Fill="Orange"/>
-                    <TextBlock Text="저장" Margin="5,0" VerticalAlignment="Center"/>
-                </StackPanel>
-            </Button>
-            
-            <Separator/>
-            
-            <Button x:Name="ImportButton" Click="ImportData_Click" ToolTip="데이터 가져오기">
-                <StackPanel Orientation="Horizontal">
-                    <Path Data="{StaticResource ImportIcon}" Style="{StaticResource ToolbarIconStyle}" Fill="SteelBlue"/>
-                    <TextBlock Text="가져오기" Margin="5,0" VerticalAlignment="Center"/>
-                </StackPanel>
-            </Button>
-            
-            <Button x:Name="ExportButton" Click="ExportData_Click" ToolTip="데이터 내보내기">
-                <StackPanel Orientation="Horizontal">
-                    <Path Data="{StaticResource ExportIcon}" Style="{StaticResource ToolbarIconStyle}" Fill="Crimson"/>
-                    <TextBlock Text="내보내기" Margin="5,0" VerticalAlignment="Center"/>
-                </StackPanel>
-            </Button>
-            
-            <Separator/>
-            
             <!-- Test Type Buttons -->
-            <Button x:Name="StandardTestButton" Click="StandardTest_Click" ToolTip="일반시험">
+            <Button x:Name="StandardTestButton" Click="StandardTest_Click" ToolTip="정격시험">
                 <StackPanel Orientation="Horizontal">
                     <Path Data="{StaticResource StandardTestIcon}" Style="{StaticResource ToolbarIconStyle}" Fill="Green"/>
-                    <TextBlock Text="일반시험" Margin="5,0" VerticalAlignment="Center"/>
+                    <TextBlock Text="정격시험" Margin="5,0" VerticalAlignment="Center"/>
                 </StackPanel>
             </Button>
             
@@ -184,6 +145,14 @@
                 <StackPanel Orientation="Horizontal">
                     <Path Data="{StaticResource NoLoadTestIcon}" Style="{StaticResource ToolbarIconStyle}" Fill="DodgerBlue"/>
                     <TextBlock Text="무부하시험" Margin="5,0" VerticalAlignment="Center"/>
+                </StackPanel>
+            </Button>
+            
+            <!-- 새 NT-Curve 시험 버튼 추가 -->
+            <Button x:Name="NtCurveTestButton" Click="NtCurveTest_Click" ToolTip="NT-Curve 시험">
+                <StackPanel Orientation="Horizontal">
+                    <Path Data="{StaticResource ChartIcon}" Style="{StaticResource ToolbarIconStyle}" Fill="MediumPurple"/>
+                    <TextBlock Text="NT-Curve시험" Margin="5,0" VerticalAlignment="Center"/>
                 </StackPanel>
             </Button>
             

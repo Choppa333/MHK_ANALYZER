@@ -446,9 +446,6 @@ namespace MGK_Analyzer
                         UpdateStatusBar(statusMessage);
                     });
 
-                    // 버튼 비활성화
-                    ImportButton.IsEnabled = false;
-
                     // CSV 파일 로딩 (비동기)
                     MemoryOptimizedDataSet dataSet;
                     using (var csvTimer = PerformanceLogger.Instance.StartTimer("CSV 파일 로딩", "Data_Import"))
@@ -482,8 +479,7 @@ namespace MGK_Analyzer
                 }
                 finally
                 {
-                    // 버튼 활성화
-                    ImportButton.IsEnabled = true;
+                    // 삭제된 ImportButton 관련 복구 코드 제거
                 }
             }
             else
@@ -602,18 +598,18 @@ namespace MGK_Analyzer
                     UpdateStatusBar("MDI 초기화가 완료되지 않았습니다.");
                     return;
                 }
-                UpdateStatusBar("일반시험 차트를 생성하고 있습니다...");
-                PerformanceLogger.Instance.LogInfo("일반시험 모드 선택", "TestMode");
+                UpdateStatusBar("정격시험 차트를 생성하고 있습니다...");
+                PerformanceLogger.Instance.LogInfo("정격시험 모드 선택", "TestMode");
                 
                 // 샘플 차트 데이터 생성
                 var sampleDataSet = CreateStandardTestSampleData();
                 
                 // 차트 윈도우 생성
-                var mdi = _mdiWindowManager.CreateChartWindow("일반시험 - " + DateTime.Now.ToString("HH:mm:ss"), sampleDataSet);
+                var mdi = _mdiWindowManager.CreateChartWindow("정격시험 - " + DateTime.Now.ToString("HH:mm:ss"), sampleDataSet);
                 mdi.WindowClosed += (s, args) => UpdateWindowCount();
                 
-                UpdateStatusBar($"일반시험 차트가 생성되었습니다. (샘플 데이터: {sampleDataSet.TotalSamples}개)");
-                PerformanceLogger.Instance.LogInfo("일반시험 차트 생성 완료", "TestMode");
+                UpdateStatusBar($"정격시험 차트가 생성되었습니다. (샘플 데이터: {sampleDataSet.TotalSamples}개)");
+                PerformanceLogger.Instance.LogInfo("정격시험 차트 생성 완료", "TestMode");
                 UpdateWindowCount();
                 
                 // 환영 메시지 숨기기
@@ -621,8 +617,8 @@ namespace MGK_Analyzer
             }
             catch (Exception ex)
             {
-                PerformanceLogger.Instance.LogError($"일반시험 모드 오류: {ex.Message}", "TestMode");
-                MessageBox.Show($"일반시험 차트 생성 중 오류 발생:\n{ex.Message}", 
+                PerformanceLogger.Instance.LogError($"정격시험 모드 오류: {ex.Message}", "TestMode");
+                MessageBox.Show($"정격시험 차트 생성 중 오류 발생:\n{ex.Message}", 
                               "오류", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
@@ -631,7 +627,7 @@ namespace MGK_Analyzer
         {
             var dataSet = new MemoryOptimizedDataSet
             {
-                FileName = "일반시험 샘플 데이터",
+                FileName = "정격시험 샘플 데이터",
                 BaseTime = DateTime.Now.AddSeconds(-100),
                 TimeInterval = 0.1f, // 0.1초 간격
                 TotalSamples = 1000
@@ -845,7 +841,7 @@ namespace MGK_Analyzer
                 TotalSamples = 1000
             };
             
-            // 무부하 전류 (낮고 안정적)
+            // 무부하 전류 (낯고 안정적)
             var noLoadCurrentSeries = new SeriesData
             {
                 Name = "무부하전류",
@@ -906,10 +902,112 @@ namespace MGK_Analyzer
             return dataSet;
         }
 
-        #endregion
+        private void NtCurveTest_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                if (_mdiWindowManager == null)
+                {
+                    UpdateStatusBar("MDI 초기화가 완료되지 않았습니다.");
+                    return;
+                }
+                UpdateStatusBar("NT-Curve 시험 차트를 생성하고 있습니다...");
+                PerformanceLogger.Instance.LogInfo("NT-Curve 시험 모드 선택", "TestMode");
+                
+                // NT-Curve 샘플 데이터 생성
+                var sampleDataSet = CreateNtCurveTestSampleData();
+                
+                // 차트 윈도우 생성
+                var mdi = _mdiWindowManager.CreateChartWindow("NT-Curve 시험 - " + DateTime.Now.ToString("HH:mm:ss"), sampleDataSet);
+                mdi.WindowClosed += (s, args) => UpdateWindowCount();
+                
+                UpdateStatusBar($"NT-Curve 시험 차트가 생성되었습니다. (샘플 데이터: {sampleDataSet.TotalSamples}개)");
+                PerformanceLogger.Instance.LogInfo("NT-Curve 시험 차트 생성 완료", "TestMode");
+                UpdateWindowCount();
+                
+                WelcomeMessage.Visibility = Visibility.Collapsed;
+            }
+            catch (Exception ex)
+            {
+                PerformanceLogger.Instance.LogError($"NT-Curve 시험 모드 오류: {ex.Message}", "TestMode");
+                MessageBox.Show($"NT-Curve 시험 차트 생성 중 오류 발생:\n{ex.Message}", "오류", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
+        private MemoryOptimizedDataSet CreateNtCurveTestSampleData()
+        {
+            var dataSet = new MemoryOptimizedDataSet
+            {
+                FileName = "NT-Curve 시험 샘플 데이터",
+                BaseTime = DateTime.Now.AddSeconds(-120),
+                TimeInterval = 0.1f,
+                TotalSamples = 1200
+            };
+
+            // 토크 시리즈
+            var torqueSeries = new SeriesData
+            {
+                Name = "토크",
+                Unit = "Nm",
+                DataType = typeof(double),
+                Color = new SolidColorBrush(Colors.MediumPurple),
+                IsVisible = true
+            };
+            torqueSeries.Values = new float[1200];
+            for (int i = 0; i < 1200; i++)
+            {
+                torqueSeries.Values[i] = (float)(50 + 20 * Math.Sin(i * 0.01) + 5 * Math.Sin(i * 0.05));
+            }
+            torqueSeries.MinValue = torqueSeries.Values.Min();
+            torqueSeries.MaxValue = torqueSeries.Values.Max();
+            torqueSeries.AvgValue = torqueSeries.Values.Average();
+
+            // 속도 시리즈
+            var speedSeries = new SeriesData
+            {
+                Name = "속도",
+                Unit = "rpm",
+                DataType = typeof(double),
+                Color = new SolidColorBrush(Colors.DarkOrange),
+                IsVisible = true
+            };
+            speedSeries.Values = new float[1200];
+            for (int i = 0; i < 1200; i++)
+            {
+                speedSeries.Values[i] = (float)(1500 + 200 * Math.Cos(i * 0.01) + 50 * Math.Sin(i * 0.02));
+            }
+            speedSeries.MinValue = speedSeries.Values.Min();
+            speedSeries.MaxValue = speedSeries.Values.Max();
+            speedSeries.AvgValue = speedSeries.Values.Average();
+
+            // 효율 시리즈
+            var efficiencySeries = new SeriesData
+            {
+                Name = "효율",
+                Unit = "%",
+                DataType = typeof(double),
+                Color = new SolidColorBrush(Colors.ForestGreen),
+                IsVisible = true
+            };
+            efficiencySeries.Values = new float[1200];
+            for (int i = 0; i < 1200; i++)
+            {
+                efficiencySeries.Values[i] = (float)(85 + 5 * Math.Sin(i * 0.015) + 2 * Math.Cos(i * 0.03));
+            }
+            efficiencySeries.MinValue = efficiencySeries.Values.Min();
+            efficiencySeries.MaxValue = efficiencySeries.Values.Max();
+            efficiencySeries.AvgValue = efficiencySeries.Values.Average();
+
+            dataSet.SeriesData.Add(torqueSeries.Name, torqueSeries);
+            dataSet.SeriesData.Add(speedSeries.Name, speedSeries);
+            dataSet.SeriesData.Add(efficiencySeries.Name, efficiencySeries);
+
+            return dataSet;
+        }
+
+        #endregion // 시험 유형 이벤트 핸들러
 
         #region 윈도우 관리
-
         private void CascadeWindows_Click(object sender, RoutedEventArgs e)
         {
             if (_mdiWindowManager == null) return;
@@ -940,7 +1038,6 @@ namespace MGK_Analyzer
             }
             else
             {
-                // fallback: Canvas의 자식 컨트롤 카운트
                 _chartWindowCount = 0;
                 if (MdiCanvas != null)
                 {
@@ -984,7 +1081,7 @@ namespace MGK_Analyzer
             catch (Exception ex)
             {
                 PerformanceLogger.Instance.LogError($"효율맵2D 차트 생성 오류: {ex.Message}", "Contour2D");
-                MessageBox.Show($"효율맵2D 차트 생성 중 오류 발생:\n{ex.Message}",
+                MessageBox.Show($"효율맵2D 차트 생성 중 오류 발생:\n{ex.Message}", 
                               "오류", MessageBoxButton.OK, MessageBoxImage.Error);
                 UpdateStatusBar("효율맵2D 차트 생성 실패");
             }
@@ -1000,7 +1097,6 @@ namespace MGK_Analyzer
                     return;
                 }
                 UpdateStatusBar("효율맵3D 차트를 생성하고 있습니다...");
-
                 var mdi = _mdiWindowManager.CreateSurface3DWindow("효율맵3D - " + DateTime.Now.ToString("HH:mm:ss"));
                 UpdateWindowCount();
                 WelcomeMessage.Visibility = Visibility.Collapsed;
@@ -1010,7 +1106,6 @@ namespace MGK_Analyzer
                 MessageBox.Show($"효율맵3D 차트 생성 중 오류 발생:\n{ex.Message}", "오류", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
-
-        #endregion
+        #endregion // 윈도우 관리
     }
 }
