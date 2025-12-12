@@ -351,6 +351,7 @@ namespace MGK_Analyzer
                     UpdateStatusBar("MDI 초기화가 완료되지 않았습니다.");
                     return;
                 }
+<<<<<<< HEAD
                 
                 var openFileDialog = new Microsoft.Win32.OpenFileDialog
                 {
@@ -384,14 +385,110 @@ namespace MGK_Analyzer
                 {
                     UpdateStatusBar("정격시험 데이터 파일 선택이 취소되었습니다.");
                 }
+=======
+                UpdateStatusBar("정격시험 차트를 생성하고 있습니다...");
+                PerformanceLogger.Instance.LogInfo("정격시험 모드 선택", "TestMode");
+                
+                // 샘플 차트 데이터 생성
+                var sampleDataSet = CreateStandardTestSampleData();
+                
+                // 차트 윈도우 생성
+                var mdi = _mdiWindowManager.CreateChartWindow("정격시험 - " + DateTime.Now.ToString("HH:mm:ss"), sampleDataSet);
+                mdi.WindowClosed += (s, args) => UpdateWindowCount();
+                
+                UpdateStatusBar($"정격시험 차트가 생성되었습니다. (샘플 데이터: {sampleDataSet.TotalSamples}개)");
+                PerformanceLogger.Instance.LogInfo("정격시험 차트 생성 완료", "TestMode");
+                UpdateWindowCount();
+                
+                // 환영 메시지 숨기기
+                WelcomeMessage.Visibility = Visibility.Collapsed;
+>>>>>>> 96bed412399e78e3ba1437803cbd360ebcb810be
             }
             catch (Exception ex)
             {
                 PerformanceLogger.Instance.LogError($"정격시험 모드 오류: {ex.Message}", "TestMode");
+<<<<<<< HEAD
                 MessageBox.Show($"정격시험 모드에서 오류 발생:\n{ex.Message}", 
                               "오류", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
+=======
+                MessageBox.Show($"정격시험 차트 생성 중 오류 발생:\n{ex.Message}", 
+                              "오류", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+        
+        private MemoryOptimizedDataSet CreateStandardTestSampleData()
+        {
+            var dataSet = new MemoryOptimizedDataSet
+            {
+                FileName = "정격시험 샘플 데이터",
+                BaseTime = DateTime.Now.AddSeconds(-100),
+                TimeInterval = 0.1f, // 0.1초 간격
+                TotalSamples = 1000
+            };
+            
+            // 전압 시리즈 (사인파)
+            var voltageSeries = new SeriesData
+            {
+                Name = "전압",
+                Unit = "V",
+                DataType = typeof(double),
+                Color = new SolidColorBrush(Colors.Blue),
+                IsVisible = true
+            };
+            voltageSeries.Values = new float[1000];
+            for (int i = 0; i < 1000; i++)
+            {
+                voltageSeries.Values[i] = (float)(220 + 10 * Math.Sin(i * 0.1));
+            }
+            voltageSeries.MinValue = voltageSeries.Values.Min();
+            voltageSeries.MaxValue = voltageSeries.Values.Max();
+            voltageSeries.AvgValue = voltageSeries.Values.Average();
+            
+            // 전류 시리즈 (코사인파)
+            var currentSeries = new SeriesData
+            {
+                Name = "전류",
+                Unit = "A",
+                DataType = typeof(double),
+                Color = new SolidColorBrush(Colors.Red),
+                IsVisible = true
+            };
+            currentSeries.Values = new float[1000];
+            for (int i = 0; i < 1000; i++)
+            {
+                currentSeries.Values[i] = (float)(10 + 2 * Math.Cos(i * 0.1));
+            }
+            currentSeries.MinValue = currentSeries.Values.Min();
+            currentSeries.MaxValue = currentSeries.Values.Max();
+            currentSeries.AvgValue = currentSeries.Values.Average();
+            
+            // 온도 시리즈 (선형 증가)
+            var tempSeries = new SeriesData
+            {
+                Name = "온도",
+                Unit = "°C",
+                DataType = typeof(double),
+                Color = new SolidColorBrush(Colors.Orange),
+                IsVisible = true
+            };
+            tempSeries.Values = new float[1000];
+            for (int i = 0; i < 1000; i++)
+            {
+                tempSeries.Values[i] = (float)(25 + i * 0.05 + Math.Sin(i * 0.3) * 2);
+            }
+            tempSeries.MinValue = tempSeries.Values.Min();
+            tempSeries.MaxValue = tempSeries.Values.Max();
+            tempSeries.AvgValue = tempSeries.Values.Average();
+            
+            dataSet.SeriesData.Add(voltageSeries.Name, voltageSeries);
+            dataSet.SeriesData.Add(currentSeries.Name, currentSeries);
+            dataSet.SeriesData.Add(tempSeries.Name, tempSeries);
+            
+            return dataSet;
+        }
+>>>>>>> 96bed412399e78e3ba1437803cbd360ebcb810be
 
         private void LoadTest_Click(object sender, RoutedEventArgs e)
         {
@@ -571,7 +668,185 @@ namespace MGK_Analyzer
                 MessageBox.Show($"NT-Curve 시험 차트 생성 중 오류 발생:\n{ex.Message}", "오류", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
+<<<<<<< HEAD
 
+=======
+        
+        private MemoryOptimizedDataSet CreateNoLoadTestSampleData()
+        {
+            var dataSet = new MemoryOptimizedDataSet
+            {
+                FileName = "무부하시험 샘플 데이터",
+                BaseTime = DateTime.Now.AddSeconds(-100),
+                TimeInterval = 0.1f,
+                TotalSamples = 1000
+            };
+            
+            // 무부하 전류 (낯고 안정적)
+            var noLoadCurrentSeries = new SeriesData
+            {
+                Name = "무부하전류",
+                Unit = "A",
+                DataType = typeof(double),
+                Color = new SolidColorBrush(Colors.LightBlue),
+                IsVisible = true
+            };
+            noLoadCurrentSeries.Values = new float[1000];
+            for (int i = 0; i < 1000; i++)
+            {
+                noLoadCurrentSeries.Values[i] = (float)(0.5 + Math.Sin(i * 0.5) * 0.1);
+            }
+            noLoadCurrentSeries.MinValue = noLoadCurrentSeries.Values.Min();
+            noLoadCurrentSeries.MaxValue = noLoadCurrentSeries.Values.Max();
+            noLoadCurrentSeries.AvgValue = noLoadCurrentSeries.Values.Average();
+            
+            // 무부하 전압 (안정적)
+            var noLoadVoltageSeries = new SeriesData
+            {
+                Name = "무부하전압",
+                Unit = "V",
+                DataType = typeof(double),
+                Color = new SolidColorBrush(Colors.SkyBlue),
+                IsVisible = true
+            };
+            noLoadVoltageSeries.Values = new float[1000];
+            for (int i = 0; i < 1000; i++)
+            {
+                noLoadVoltageSeries.Values[i] = (float)(220 + Math.Cos(i * 0.3) * 1);
+            }
+            noLoadVoltageSeries.MinValue = noLoadVoltageSeries.Values.Min();
+            noLoadVoltageSeries.MaxValue = noLoadVoltageSeries.Values.Max();
+            noLoadVoltageSeries.AvgValue = noLoadVoltageSeries.Values.Average();
+            
+            // 역률
+            var powerFactorSeries = new SeriesData
+            {
+                Name = "역률",
+                Unit = "",
+                DataType = typeof(double),
+                Color = new SolidColorBrush(Colors.Purple),
+                IsVisible = true
+            };
+            powerFactorSeries.Values = new float[1000];
+            for (int i = 0; i < 1000; i++)
+            {
+                powerFactorSeries.Values[i] = (float)(0.95 + Math.Sin(i * 0.2) * 0.03);
+            }
+            powerFactorSeries.MinValue = powerFactorSeries.Values.Min();
+            powerFactorSeries.MaxValue = powerFactorSeries.Values.Max();
+            powerFactorSeries.AvgValue = powerFactorSeries.Values.Average();
+            
+            dataSet.SeriesData.Add(noLoadCurrentSeries.Name, noLoadCurrentSeries);
+            dataSet.SeriesData.Add(noLoadVoltageSeries.Name, noLoadVoltageSeries);
+            dataSet.SeriesData.Add(powerFactorSeries.Name, powerFactorSeries);
+            
+            return dataSet;
+        }
+
+        private void NtCurveTest_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                if (_mdiWindowManager == null)
+                {
+                    UpdateStatusBar("MDI 초기화가 완료되지 않았습니다.");
+                    return;
+                }
+                UpdateStatusBar("NT-Curve 시험 차트를 생성하고 있습니다...");
+                PerformanceLogger.Instance.LogInfo("NT-Curve 시험 모드 선택", "TestMode");
+                
+                // NT-Curve 샘플 데이터 생성
+                var sampleDataSet = CreateNtCurveTestSampleData();
+                
+                // 차트 윈도우 생성
+                var mdi = _mdiWindowManager.CreateChartWindow("NT-Curve 시험 - " + DateTime.Now.ToString("HH:mm:ss"), sampleDataSet);
+                mdi.WindowClosed += (s, args) => UpdateWindowCount();
+                
+                UpdateStatusBar($"NT-Curve 시험 차트가 생성되었습니다. (샘플 데이터: {sampleDataSet.TotalSamples}개)");
+                PerformanceLogger.Instance.LogInfo("NT-Curve 시험 차트 생성 완료", "TestMode");
+                UpdateWindowCount();
+                
+                WelcomeMessage.Visibility = Visibility.Collapsed;
+            }
+            catch (Exception ex)
+            {
+                PerformanceLogger.Instance.LogError($"NT-Curve 시험 모드 오류: {ex.Message}", "TestMode");
+                MessageBox.Show($"NT-Curve 시험 차트 생성 중 오류 발생:\n{ex.Message}", "오류", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
+        private MemoryOptimizedDataSet CreateNtCurveTestSampleData()
+        {
+            var dataSet = new MemoryOptimizedDataSet
+            {
+                FileName = "NT-Curve 시험 샘플 데이터",
+                BaseTime = DateTime.Now.AddSeconds(-120),
+                TimeInterval = 0.1f,
+                TotalSamples = 1200
+            };
+
+            // 토크 시리즈
+            var torqueSeries = new SeriesData
+            {
+                Name = "토크",
+                Unit = "Nm",
+                DataType = typeof(double),
+                Color = new SolidColorBrush(Colors.MediumPurple),
+                IsVisible = true
+            };
+            torqueSeries.Values = new float[1200];
+            for (int i = 0; i < 1200; i++)
+            {
+                torqueSeries.Values[i] = (float)(50 + 20 * Math.Sin(i * 0.01) + 5 * Math.Sin(i * 0.05));
+            }
+            torqueSeries.MinValue = torqueSeries.Values.Min();
+            torqueSeries.MaxValue = torqueSeries.Values.Max();
+            torqueSeries.AvgValue = torqueSeries.Values.Average();
+
+            // 속도 시리즈
+            var speedSeries = new SeriesData
+            {
+                Name = "속도",
+                Unit = "rpm",
+                DataType = typeof(double),
+                Color = new SolidColorBrush(Colors.DarkOrange),
+                IsVisible = true
+            };
+            speedSeries.Values = new float[1200];
+            for (int i = 0; i < 1200; i++)
+            {
+                speedSeries.Values[i] = (float)(1500 + 200 * Math.Cos(i * 0.01) + 50 * Math.Sin(i * 0.02));
+            }
+            speedSeries.MinValue = speedSeries.Values.Min();
+            speedSeries.MaxValue = speedSeries.Values.Max();
+            speedSeries.AvgValue = speedSeries.Values.Average();
+
+            // 효율 시리즈
+            var efficiencySeries = new SeriesData
+            {
+                Name = "효율",
+                Unit = "%",
+                DataType = typeof(double),
+                Color = new SolidColorBrush(Colors.ForestGreen),
+                IsVisible = true
+            };
+            efficiencySeries.Values = new float[1200];
+            for (int i = 0; i < 1200; i++)
+            {
+                efficiencySeries.Values[i] = (float)(85 + 5 * Math.Sin(i * 0.015) + 2 * Math.Cos(i * 0.03));
+            }
+            efficiencySeries.MinValue = efficiencySeries.Values.Min();
+            efficiencySeries.MaxValue = efficiencySeries.Values.Max();
+            efficiencySeries.AvgValue = efficiencySeries.Values.Average();
+
+            dataSet.SeriesData.Add(torqueSeries.Name, torqueSeries);
+            dataSet.SeriesData.Add(speedSeries.Name, speedSeries);
+            dataSet.SeriesData.Add(efficiencySeries.Name, efficiencySeries);
+
+            return dataSet;
+        }
+
+>>>>>>> 96bed412399e78e3ba1437803cbd360ebcb810be
         #endregion // 시험 유형 이벤트 핸들러
 
         #region 윈도우 관리
