@@ -188,7 +188,8 @@ namespace MGK_Analyzer.Services
                     int lineCount;
                     using (var loadTimer = PerformanceLogger.Instance.StartTimer("데이터 스트리밍 로드", "CSV_Loading"))
                     {
-                        lineCount = await LoadDataStreamingAsync(reader, headers, seriesDict, dataSet, estimatedRows, progress);
+                        var columnMap = CreateColumnMap(headers, seriesDict);
+                        lineCount = await LoadDataStreamingAsync(reader, columnMap, dataSet, estimatedRows, progress);
                         PerformanceLogger.Instance.LogInfo($"실제 데이터 행 수: {lineCount:N0}", "CSV_Loading");
                     }
 
@@ -255,20 +256,38 @@ namespace MGK_Analyzer.Services
             return (int)(fileSizeMB * 1000);
         }
 
-        private async Task<int> LoadDataStreamingAsync(StreamReader reader, string[] headers, 
-            Dictionary<string, SeriesData> seriesDict, MemoryOptimizedDataSet dataSet, 
+        private static SeriesData?[] CreateColumnMap(string[] headers, Dictionary<string, SeriesData> seriesDict)
+        {
+            var map = new SeriesData?[headers.Length];
+            for (int i = 2; i < headers.Length; i++)
+            {
+                var header = headers[i]?.Trim();
+                if (string.IsNullOrEmpty(header)) continue;
+                if (seriesDict.TryGetValue(header, out var series))
+                {
+                    map[i] = series;
+                }
+            }
+            return map;
+        }
+
+        private async Task<int> LoadDataStreamingAsync(StreamReader reader,
+            SeriesData?[] columnMap, MemoryOptimizedDataSet dataSet,
             int estimatedRows, IProgress<int> progress)
         {
-            Console.WriteLine("=== LoadDataStreamingAsync 시작 (최적화 버전) ===");
-            
-            // 더 큰 청크 크기로 성능 개선
-            const int CHUNK_SIZE = 50000; // 10,000 -> 50,000으로 증가
-            const int BUFFER_SIZE = CHUNK_SIZE * 200; // 대용량 문자열 버퍼
-            
+            Console.WriteLine("=== LoadDataStreamingAsync 시작 (블록 기반) ===");
+
+            const int BUFFER_CHAR_CAPACITY = 64 * 1024;
+            const int PROGRESS_UPDATE_INTERVAL = 50_000;
+
+            var buffers = new[]
+            {
+                new char[BUFFER_CHAR_CAPACITY],
+                new char[BUFFER_CHAR_CAPACITY]
+            };
+            var lineBuilder = new StringBuilder(BUFFER_CHAR_CAPACITY);
             var lineCount = 0;
-            var charBuffer = new char[BUFFER_SIZE];
-            var stringBuilder = new StringBuilder(BUFFER_SIZE);
-            
+
             // 첫 번째 및 두 번째 라인에서 시간 정보 설정 (메타 BaseTime 우선)
             var firstLine = await reader.ReadLineAsync();
             if (!string.IsNullOrEmpty(firstLine))
@@ -320,8 +339,8 @@ namespace MGK_Analyzer.Services
                     }
 
                     // Process both lines
-                    ProcessSingleLine(firstLine, headers, seriesDict, 0);
-                    ProcessSingleLine(secondLine, headers, seriesDict, 1);
+                    ProcessSingleLineSpan(firstLine.AsSpan(), columnMap, 0);
+                    ProcessSingleLineSpan(secondLine.AsSpan(), columnMap, 1);
                     lineCount = 2;
                 }
                 else
@@ -336,108 +355,178 @@ namespace MGK_Analyzer.Services
                         dataSet.TimeInterval = 1.0f;
                     }
 
-                    ProcessSingleLine(firstLine, headers, seriesDict, 0);
+                    ProcessSingleLineSpan(firstLine.AsSpan(), columnMap, 0);
                     lineCount = 1;
                 }
             }
 
-            // 대용량 청크 단위로 읽기
-            var lines = new List<string>(CHUNK_SIZE);
-            string line;
-            
-            while ((line = await reader.ReadLineAsync()) != null)
+            var currentBufferIndex = 0;
+            var charsRead = await reader.ReadAsync(buffers[currentBufferIndex], 0, BUFFER_CHAR_CAPACITY);
+            if (charsRead == 0)
             {
-                if (!string.IsNullOrWhiteSpace(line))
+                return lineCount;
+            }
+
+            while (charsRead > 0)
+            {
+                var nextBufferIndex = 1 - currentBufferIndex;
+                var nextReadTask = reader.ReadAsync(buffers[nextBufferIndex], 0, BUFFER_CHAR_CAPACITY);
+
+                ProcessBuffer(buffers[currentBufferIndex].AsSpan(0, charsRead));
+
+                charsRead = await nextReadTask;
+                currentBufferIndex = nextBufferIndex;
+            }
+
+            // 남은 줄 처리
+            FlushPendingLine();
+
+            Console.WriteLine($"스트리밍 데이터 로딩 완료 - 총 {lineCount:N0}개 라인");
+            return lineCount;
+
+            void ProcessBuffer(ReadOnlySpan<char> chunk)
+            {
+                if (chunk.IsEmpty)
                 {
-                    lines.Add(line);
-                    lineCount++;
-                    
-                    // 청크가 가득 차면 병렬 처리
-                    if (lines.Count >= CHUNK_SIZE)
+                    return;
+                }
+
+                var segmentStart = 0;
+                for (int i = 0; i < chunk.Length; i++)
+                {
+                    var ch = chunk[i];
+                    if (ch == '\n' || ch == '\r')
                     {
-                        await ProcessChunkParallelAsync(lines, headers, seriesDict, lineCount - lines.Count);
-                        lines.Clear();
-                        
-                        // 진행률 업데이트 (빈도 줄임)
-                        var progressPercent = 20 + (int)((double)lineCount / estimatedRows * 60);
-                        progress?.Report(Math.Min(85, progressPercent));
-                        
-                        // UI 반응성을 위한 잠시 양보 (빈도 줄임)
-                        if (lineCount % (CHUNK_SIZE * 2) == 0)
+                        var segmentLength = i - segmentStart;
+                        var hasData = segmentLength > 0 || lineBuilder.Length > 0;
+                        if (hasData)
                         {
-                            await Task.Delay(1);
+                            var segment = chunk.Slice(segmentStart, Math.Max(0, segmentLength));
+                            CompleteLine(segment);
                         }
+
+                        if (ch == '\r' && i + 1 < chunk.Length && chunk[i + 1] == '\n')
+                        {
+                            i++;
+                        }
+                        segmentStart = i + 1;
                     }
                 }
 
-            // 디버그: 남아있는 스트림 여부 로그
-            PerformanceLogger.Instance.LogInfo($"LoadDataStreamingAsync 종료 - reader.EndOfStream: {reader.EndOfStream}", "CSV_Loading");
-            }
-
-            // 마지막 청크 처리
-            if (lines.Count > 0)
-            {
-                await ProcessChunkParallelAsync(lines, headers, seriesDict, lineCount - lines.Count);
-            }
-
-            Console.WriteLine($"최적화된 데이터 로딩 완료 - 총 {lineCount:N0}개 라인");
-            return lineCount;
-        }
-
-        private async Task ProcessChunkParallelAsync(List<string> lines, string[] headers, 
-            Dictionary<string, SeriesData> seriesDict, int startIndex)
-        {
-            // 단순 순차 처리로 안정성 확보 (병렬 처리에서 인덱스 불일치로 데이터 누락 가능성 있음)
-            await Task.Run(() =>
-            {
-                for (int i = 0; i < lines.Count; i++)
+                if (segmentStart < chunk.Length)
                 {
-                    ProcessSingleLine(lines[i], headers, seriesDict, startIndex + i);
+                    lineBuilder.Append(chunk.Slice(segmentStart));
                 }
-            });
+            }
+
+            void CompleteLine(ReadOnlySpan<char> segment)
+            {
+                ReadOnlySpan<char> lineSpan;
+                if (lineBuilder.Length > 0)
+                {
+                    lineBuilder.Append(segment);
+                    var composed = lineBuilder.ToString();
+                    lineBuilder.Clear();
+                    lineSpan = composed.AsSpan();
+                    ProcessSingleLineSpan(lineSpan, columnMap, lineCount);
+                }
+                else if (!segment.IsEmpty)
+                {
+                    ProcessSingleLineSpan(segment, columnMap, lineCount);
+                }
+                else
+                {
+                    return;
+                }
+
+                lineCount++;
+                if (lineCount % PROGRESS_UPDATE_INTERVAL == 0)
+                {
+                    var percent = 20 + (int)((double)lineCount / Math.Max(1, estimatedRows) * 60);
+                    progress?.Report(Math.Min(85, percent));
+                }
+            }
+
+            void FlushPendingLine()
+            {
+                if (lineBuilder.Length == 0)
+                {
+                    return;
+                }
+
+                CompleteLine(ReadOnlySpan<char>.Empty);
+            }
         }
 
-        private void ProcessSingleLine(string line, string[] headers, 
-            Dictionary<string, SeriesData> seriesDict, int rowIndex)
+        private void ProcessSingleLineSpan(ReadOnlySpan<char> line, SeriesData?[] columnMap, int rowIndex)
         {
-            var values = line.Split(',');
-            
-            // 컬럼 수 사전 체크로 성능 개선
-            var maxColumns = Math.Min(values.Length, headers.Length);
-            
-            for (int colIndex = 2; colIndex < maxColumns; colIndex++)
+            if (columnMap.Length < 3 || line.IsEmpty) return;
+
+            var start = 0;
+            var colIndex = 0;
+
+            while (start <= line.Length && colIndex < columnMap.Length)
             {
-                var seriesName = headers[colIndex]?.Trim();
-                if (string.IsNullOrEmpty(seriesName) || !seriesDict.TryGetValue(seriesName, out var series)) 
-                    continue;
-                
-                if (rowIndex >= series.Values.Length) continue;
-                
-                var cellValue = values[colIndex]?.Trim();
-                if (string.IsNullOrEmpty(cellValue)) continue;
-                
-                if (series.DataType == typeof(bool))
+                int nextComma = -1;
+                if (start < line.Length)
                 {
-                    if (cellValue == "1" || cellValue.Equals("true", StringComparison.OrdinalIgnoreCase))
+                    nextComma = line.Slice(start).IndexOf(',');
+                }
+
+                ReadOnlySpan<char> token;
+                if (nextComma >= 0)
+                {
+                    token = line.Slice(start, nextComma);
+                    start += nextComma + 1;
+                }
+                else
+                {
+                    token = line.Slice(start);
+                    start = line.Length + 1;
+                }
+
+                if (colIndex >= 2)
+                {
+                    var series = columnMap[colIndex];
+                    if (series != null && rowIndex < series.Values.Length)
                     {
-                        if (series.BitValues != null && rowIndex < series.BitValues.Length)
+                        var trimmed = token.Trim();
+                        if (!trimmed.IsEmpty)
                         {
-                            lock (series.BitValues) // 병렬 처리를 위한 동기화
+                            if (series.DataType == typeof(bool))
                             {
-                                series.BitValues[rowIndex] = true;
+                                if (IsTrueToken(trimmed) && series.BitValues != null && rowIndex < series.BitValues.Length)
+                                {
+                                    series.BitValues[rowIndex] = true;
+                                }
+                            }
+                            else if (float.TryParse(trimmed, NumberStyles.Float, CultureInfo.InvariantCulture, out var floatVal))
+                            {
+                                series.Values[rowIndex] = floatVal;
                             }
                         }
                     }
                 }
-                else
+
+                colIndex++;
+                if (nextComma < 0)
                 {
-                    // 빠른 float 파싱
-                    if (float.TryParse(cellValue, NumberStyles.Float, CultureInfo.InvariantCulture, out var floatVal))
-                    {
-                        series.Values[rowIndex] = floatVal;
-                    }
+                    break;
                 }
             }
+        }
+
+        private static bool IsTrueToken(ReadOnlySpan<char> value)
+        {
+            if (value.Length == 0) return false;
+
+            if (value.Length == 1)
+            {
+                var ch = value[0];
+                return ch == '1' || ch == 'T' || ch == 't';
+            }
+
+            return value.Equals("true".AsSpan(), StringComparison.OrdinalIgnoreCase);
         }
 
         private void ResizeArrays(Dictionary<string, SeriesData> seriesDict, int actualSize)

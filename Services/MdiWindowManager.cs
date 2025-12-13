@@ -23,15 +23,19 @@ namespace MGK_Analyzer.Services
             _mdiCanvas = canvas;
         }
 
-        public MdiChartWindow CreateChartWindow(string fileName, MemoryOptimizedDataSet dataSet)
+        public MdiChartWindow CreateChartWindow(string fileName, MemoryOptimizedDataSet dataSet, IEnumerable<string>? initialSeries = null)
         {
             var window = new MdiChartWindow
             {
                 Width = 800,
                 Height = 600,
                 WindowTitle = $"Chart - {fileName}",
-                DataSet = dataSet
             };
+            if (initialSeries != null)
+            {
+                window.SetInitialSeriesSelection(initialSeries);
+            }
+            window.DataSet = dataSet;
             
             var left = _windowOffset * 30;
             var top = _windowOffset * 30;
