@@ -2,13 +2,12 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
+using System.Globalization;
 using System.Linq;
-using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
@@ -25,13 +24,28 @@ namespace MGK_Analyzer.Controls
             private Point _lastPosition;
             private static int _globalZIndex = 1; // deprecated local counter; retained to avoid widespread edits
             private MemoryOptimizedDataSet? _dataSet;
-            private bool _isManagementPanelExpanded = true;
-            private bool _isManagementPanelPinned = false;
-            private readonly List<ChartCursorHandle> _cursorHandles = new();
-            private readonly Dictionary<string, NumericalAxis> _unitAxes = new(StringComparer.OrdinalIgnoreCase);
-            private NumericalAxis? _defaultSecondaryAxis;
-            private static readonly PropertyInfo? PlotAreaClipRectProperty =
-                typeof(SfChart).GetProperty("PlotAreaClipRect", BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public);
+        private bool _isManagementPanelExpanded = true;
+        private bool _isManagementPanelPinned = false;
+        private bool _isLeftPanelExpanded = true;
+        private bool _isLeftPanelPinned = false;
+		private readonly List<ChartCursorHandle> _cursorHandles = new();
+		private const int MaxActiveSeriesCount = 10;
+		private const int MaxSnapshotSeriesValues = MaxActiveSeriesCount;
+		private const bool EnableCursorDebugLogging = false;
+		private bool _isRefreshingCursorHandles;
+		private bool _pendingSnapshotRefresh;
+		private bool _isUpdatingSeriesSelection;
+            private static readonly Brush[] CursorColorPalette =
+            {
+                Brushes.Crimson,
+                Brushes.DodgerBlue,
+                Brushes.MediumSeaGreen,
+                Brushes.Goldenrod,
+                Brushes.MediumOrchid
+            };
+		private readonly Dictionary<string, NumericalAxis> _unitAxes = new(StringComparer.OrdinalIgnoreCase);
+		private NumericalAxis? _defaultSecondaryAxis;
+		private (double min, double max)? _cachedDataValueRange;
         private HashSet<string> _initialSeriesSelection = new(StringComparer.OrdinalIgnoreCase);
         
         // 윈도우 크기 상태 저장
@@ -71,6 +85,16 @@ namespace MGK_Analyzer.Controls
             }
         }
 
+        private void LeftPanel_MouseLeave(object sender, MouseEventArgs e)
+        {
+            if (!_isLeftPanelPinned)
+            {
+                LeftPanel.Visibility = Visibility.Collapsed;
+                LeftPanelTab.Visibility = Visibility.Visible;
+                _isLeftPanelExpanded = false;
+            }
+        }
+
         private void PanelPinButton_Checked(object sender, RoutedEventArgs e)
         {
             _isManagementPanelPinned = true;
@@ -81,11 +105,28 @@ namespace MGK_Analyzer.Controls
             _isManagementPanelPinned = false;
         }
 
+        private void LeftPanelPinButton_Checked(object sender, RoutedEventArgs e)
+        {
+            _isLeftPanelPinned = true;
+        }
+
+        private void LeftPanelPinButton_Unchecked(object sender, RoutedEventArgs e)
+        {
+            _isLeftPanelPinned = false;
+        }
+
         private void ManagementPanelTab_MouseEnter(object sender, System.Windows.Input.MouseEventArgs e)
         {
             ManagementPanel.Visibility = Visibility.Visible;
             ManagementPanelTab.Visibility = Visibility.Collapsed;
             _isManagementPanelExpanded = true;
+        }
+
+        private void LeftPanelTab_MouseEnter(object sender, MouseEventArgs e)
+        {
+            LeftPanel.Visibility = Visibility.Visible;
+            LeftPanelTab.Visibility = Visibility.Collapsed;
+            _isLeftPanelExpanded = true;
         }
 
         private void ManagementPanelTab_MouseDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
@@ -105,6 +146,22 @@ namespace MGK_Analyzer.Controls
             }
         }
 
+        private void LeftPanelTab_MouseDown(object sender, MouseButtonEventArgs e)
+        {
+            if (_isLeftPanelExpanded)
+            {
+                LeftPanel.Visibility = Visibility.Collapsed;
+                LeftPanelTab.Visibility = Visibility.Visible;
+                _isLeftPanelExpanded = false;
+            }
+            else
+            {
+                LeftPanel.Visibility = Visibility.Visible;
+                LeftPanelTab.Visibility = Visibility.Collapsed;
+                _isLeftPanelExpanded = true;
+            }
+        }
+
         public MemoryOptimizedDataSet? DataSet
         {
             get => _dataSet;
@@ -115,6 +172,7 @@ namespace MGK_Analyzer.Controls
                 ClearCursorHandles();
                 _dataSet = value; 
                 OnPropertyChanged();
+				RebuildDataValueRangeCache();
                 
                 PerformanceLogger.Instance.LogInfo($"차트 데이터 설정 - 파일: {value?.FileName}, 시리즈: {value?.SeriesData?.Count}", "Chart_Display");
                 InitializeSeriesList();
@@ -129,6 +187,7 @@ namespace MGK_Analyzer.Controls
         }
 
         public ObservableCollection<ChartSeriesViewModel> SeriesList { get; set; } = new ObservableCollection<ChartSeriesViewModel>();
+        public ObservableCollection<CursorSnapshotViewModel> SnapshotList { get; } = new();
 
         public event EventHandler? WindowClosed;
         public event EventHandler? WindowActivated;
@@ -141,6 +200,8 @@ namespace MGK_Analyzer.Controls
             
             _isManagementPanelExpanded = true;
             _isManagementPanelPinned = false;
+            _isLeftPanelExpanded = true;
+            _isLeftPanelPinned = false;
 
             // XAML에 정의된 기본 축을 사용하거나, 여기서 코드로 설정
             ChartControl.PrimaryAxis = new DateTimeAxis { Header = "Time", LabelFormat = "HH:mm:ss.fff" };
@@ -188,6 +249,11 @@ namespace MGK_Analyzer.Controls
         {
             if (e.PropertyName == nameof(ChartSeriesViewModel.IsSelected))
             {
+				if (_isUpdatingSeriesSelection)
+				{
+					return;
+				}
+
                 var viewModel = (ChartSeriesViewModel)sender;
                 var seriesName = viewModel.SeriesData.Name;
                 
@@ -196,6 +262,13 @@ namespace MGK_Analyzer.Controls
                 
                 if (viewModel.IsSelected)
                 {
+					if (!CanAddMoreSeries())
+					{
+						ShowSeriesLimitMessage();
+						SetSeriesSelection(viewModel, false);
+						return;
+					}
+
                     // UI 응답성을 위해 비동기로 처리
                     await Task.Run(() =>
                     {
@@ -216,7 +289,7 @@ namespace MGK_Analyzer.Controls
 
         private async Task AddSeriesToChart(SeriesData series)
         {
-            if (DataSet == null)
+			if (DataSet == null || ChartControl == null)
             {
                 return;
             }
@@ -227,19 +300,26 @@ namespace MGK_Analyzer.Controls
                 return;
             }
 
-            var seriesType = series.DataType == typeof(bool) ? typeof(StepLineSeries) : typeof(FastLineSeries);
+			if (!CanAddMoreSeries())
+			{
+				ShowSeriesLimitMessage();
+				return;
+			}
 
-            var sampleStep = Math.Max(1, DataSet.TotalSamples / 500);
+			var seriesType = series.DataType == typeof(bool) ? typeof(StepLineSeries) : typeof(FastLineBitmapSeries);
+			var targetPointBudget = GetTargetPointBudget();
+			var sampleStep = Math.Max(1, DataSet.TotalSamples / Math.Max(1, targetPointBudget));
             List<ChartDataPoint> dataPoints;
 
-            if (series.DataType == typeof(bool))
-            {
-                var boolStep = Math.Max(1, DataSet.TotalSamples / 10000);
-                dataPoints = await Task.Run(() => CreateBoolDataPoints(series, boolStep));
-            }
+			if (series.DataType == typeof(bool))
+			{
+				var boolBudget = Math.Max(200, Math.Min(1200, targetPointBudget));
+				var boolStep = Math.Max(1, DataSet.TotalSamples / boolBudget);
+				dataPoints = await Task.Run(() => CreateBoolDataPoints(series, boolStep, boolBudget));
+			}
             else
             {
-                dataPoints = await Task.Run(() => CreateDoubleDataPoints(series, sampleStep));
+				dataPoints = await Task.Run(() => CreateDoubleDataPoints(series, sampleStep, targetPointBudget));
             }
 
             if (dataPoints.Count == 0)
@@ -247,8 +327,9 @@ namespace MGK_Analyzer.Controls
                 return;
             }
 
-            var chartSeries = (ChartSeries)Activator.CreateInstance(seriesType);
-            chartSeries.ItemsSource = dataPoints;
+			var chartSeries = (ChartSeries)Activator.CreateInstance(seriesType);
+			chartSeries.ItemsSource = dataPoints;
+			ConfigureSeriesPerformance(chartSeries, dataPoints.Count);
 
             // 일부 차트 시리즈는 X/Y 바인딩 속성이 없음, dynamic으로 설정
             dynamic dynSeries = chartSeries;
@@ -272,32 +353,45 @@ namespace MGK_Analyzer.Controls
             {
                 // Some series types may not expose a YAxis property; ignore in that case.
             }
-            try
-            {
-                dynSeries.EnableTooltip = true;
-            }
-            catch { }
 
-            if (chartSeries is FastLineSeries fastLineSeries)
-            {
-                fastLineSeries.Stroke = series.Color;
-            }
-            else if (chartSeries is StepLineSeries stepLineSeries)
-            {
-                stepLineSeries.Stroke = series.Color;
-            }
+			if (chartSeries is FastLineBitmapSeries fastBitmapSeries)
+			{
+				fastBitmapSeries.Stroke = series.Color;
+			}
+			else if (chartSeries is StepLineSeries stepLineSeries)
+			{
+				stepLineSeries.Stroke = series.Color;
+			}
 
             ChartControl.Series.Add(chartSeries);
+            RefreshAllSnapshots();
         }
 
-        private List<ChartDataPoint> CreateBoolDataPoints(SeriesData series, int step)
+		private void ConfigureSeriesPerformance(ChartSeries chartSeries, int dataPointCount)
+		{
+			chartSeries.EnableAnimation = false;
+			chartSeries.AnimationDuration = TimeSpan.Zero;
+
+			var enableTooltips = dataPointCount <= 300;
+			try
+			{
+				dynamic dynSeries = chartSeries;
+				dynSeries.EnableTooltip = enableTooltips;
+			}
+			catch
+			{
+				// ignore tooltip capability if not exposed
+			}
+		}
+
+		private List<ChartDataPoint> CreateBoolDataPoints(SeriesData series, int step, int maxPoints)
         {
             using var timer = PerformanceLogger.Instance.StartTimer($"Bool 데이터 포인트 생성: {series.Name}", "Chart_Display");
             
             var dataPoints = new List<ChartDataPoint>();
-            var pointCount = 0;
+			var pointCount = 0;
             
-            for (int i = 0; i < DataSet.TotalSamples && pointCount < 10000; i += step)
+			for (int i = 0; i < DataSet.TotalSamples && pointCount < maxPoints; i += step)
             {
                 bool value = GetBoolValue(series.BitValues, i);
                 dataPoints.Add(new ChartDataPoint(DataSet.GetTimeAt(i), value ? 1.0 : 0.0)
@@ -311,77 +405,36 @@ namespace MGK_Analyzer.Controls
             return dataPoints;
         }
 
-        private List<ChartDataPoint> CreateDoubleDataPoints(SeriesData series, int step)
-        {
-            Console.WriteLine($"=== CreateDoubleDataPoints 시작: {series.Name} ===");
-            using var timer = PerformanceLogger.Instance.StartTimer($"Double 데이터 포인트 생성: {series.Name}", "Chart_Display");
-            
-            var dataPoints = new List<ChartDataPoint>();
-            var pointCount = 0;
-            var maxPointsToCreate = 500; // 성능을 위해 제한
-            
-            Console.WriteLine($"TotalSamples: {DataSet.TotalSamples}, Step: {step}, MaxPoints: {maxPointsToCreate}");
-            Console.WriteLine($"BaseTime: {DataSet.BaseTime}, TimeInterval: {DataSet.TimeInterval}");
-            
-            // 실제 데이터 값 확인
-            if (series.Values != null && series.Values.Length > 0)
-            {
-                Console.WriteLine($"Values 배열 길이: {series.Values.Length}");
-                var firstFiveValues = series.Values.Take(5).ToArray();
-                Console.WriteLine($"첫 5개 값: [{string.Join(", ", firstFiveValues)}]");
-                
-                var nonZeroCount = series.Values.Take(Math.Min(100, series.Values.Length)).Count(v => v != 0 && !float.IsNaN(v));
-                Console.WriteLine($"처음 100개 중 0이 아닌 값의 개수: {nonZeroCount}");
-            }
-            else
-            {
-                Console.WriteLine("ERROR: Values 배열이 null이거나 비어있습니다!");
-                return dataPoints;
-            }
-            
-            // 안전한 범위에서만 처리
-            var maxSafeIndex = Math.Min(DataSet.TotalSamples, series.Values.Length);
-            Console.WriteLine($"안전 처리 범위: 0 ~ {maxSafeIndex-1}");
-            
-            for (int i = 0; i < maxSafeIndex && pointCount < maxPointsToCreate; i += step)
-            {
-                try
-                {
-                    var time = DataSet.GetTimeAt(i);
-                    var value = series.Values[i];
-                    
-                    // NaN, Infinity 값 체크
-                    if (float.IsNaN(value) || float.IsInfinity(value))
-                    {
-                        continue;
-                    }
-                    
-                    dataPoints.Add(new ChartDataPoint(time, value)
-                    {
-                        SeriesName = series.Name
-                    });
-                    
-                    // 처음 3개 포인트만 로그 출력
-                    if (pointCount < 3)
-                    {
-                        Console.WriteLine($"포인트 {pointCount}: Time={time:HH:mm:ss}, Value={value}");
-                    }
-                    
-                    pointCount++;
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"ERROR: 데이터 포인트 생성 중 오류 (인덱스 {i}): {ex.Message}");
-                    break;
-                }
-            }
-            
-            Console.WriteLine($"Double 데이터 포인트 생성 완료: {pointCount:N0}개");
-            PerformanceLogger.Instance.LogInfo($"Double 데이터 포인트 생성 완료: {pointCount:N0}개", "Chart_Display");
-            
-            Console.WriteLine($"=== CreateDoubleDataPoints 완료: {series.Name} ===");
-            return dataPoints;
-        }
+		private List<ChartDataPoint> CreateDoubleDataPoints(SeriesData series, int step, int maxPointsToCreate)
+		{
+			using var timer = PerformanceLogger.Instance.StartTimer($"Double 데이터 포인트 생성: {series.Name}", "Chart_Display");
+			var dataPoints = new List<ChartDataPoint>();
+			var pointCount = 0;
+			if (series.Values == null || series.Values.Length == 0)
+			{
+				return dataPoints;
+			}
+
+			var maxSafeIndex = Math.Min(DataSet.TotalSamples, series.Values.Length);
+			for (int i = 0; i < maxSafeIndex && pointCount < maxPointsToCreate; i += step)
+			{
+				var value = series.Values[i];
+				if (float.IsNaN(value) || float.IsInfinity(value))
+				{
+					continue;
+				}
+
+				var time = DataSet.GetTimeAt(i);
+				dataPoints.Add(new ChartDataPoint(time, value)
+				{
+					SeriesName = series.Name
+				});
+				pointCount++;
+			}
+
+			PerformanceLogger.Instance.LogInfo($"Double 데이터 포인트 생성 완료: {pointCount:N0}개", "Chart_Display");
+			return dataPoints;
+		}
 
         private void RemoveSeriesFromChart(SeriesData series)
         {
@@ -390,39 +443,78 @@ namespace MGK_Analyzer.Controls
             if (seriesToRemove != null)
             {
                 ChartControl.Series.Remove(seriesToRemove);
+                RefreshAllSnapshots();
             }
         }
 
+		private void RebuildDataValueRangeCache()
+		{
+			_cachedDataValueRange = null;
+			if (DataSet?.SeriesData == null || DataSet.SeriesData.Count == 0)
+			{
+				return;
+			}
+
+			double min = double.MaxValue;
+			double max = double.MinValue;
+
+			foreach (var series in DataSet.SeriesData.Values)
+			{
+				if (series.DataType == typeof(bool))
+				{
+					min = Math.Min(min, 0);
+					max = Math.Max(max, 1);
+					continue;
+				}
+
+				if (series.Values == null || series.Values.Length == 0)
+				{
+					continue;
+				}
+
+				foreach (var value in series.Values)
+				{
+					if (float.IsNaN(value) || float.IsInfinity(value))
+					{
+						continue;
+					}
+
+					var doubleValue = value;
+					if (doubleValue < min) min = doubleValue;
+					if (doubleValue > max) max = doubleValue;
+				}
+			}
+
+			if (min == double.MaxValue || max == double.MinValue)
+			{
+				return;
+			}
+
+			if (Math.Abs(max - min) < 0.001)
+			{
+				max = min + 1;
+			}
+
+			_cachedDataValueRange = (min, max);
+		}
+
         private (double min, double max) GetVisibleValueRange()
         {
-            if (ChartControl.SecondaryAxis is NumericalAxis numericAxis && numericAxis.VisibleRange != null)
-            {
-                var range = numericAxis.VisibleRange;
-                if (range.End > range.Start)
-                {
-                    return (range.Start, range.End);
-                }
-            }
+			if (ChartControl.SecondaryAxis is NumericalAxis numericAxis && numericAxis.VisibleRange != null)
+			{
+				var range = numericAxis.VisibleRange;
+				if (range.End > range.Start)
+				{
+					return (range.Start, range.End);
+				}
+			}
 
-            if (DataSet?.SeriesData != null)
-            {
-                var (min, max) = (double.MaxValue, double.MinValue);
-                foreach (var series in DataSet.SeriesData.Values)
-                {
-                    if (series.Values == null || series.Values.Length == 0) continue;
-                    var seriesMin = series.Values.Min();
-                    var seriesMax = series.Values.Max();
-                    if (seriesMin < min) min = seriesMin;
-                    if (seriesMax > max) max = seriesMax;
-                }
+			if (_cachedDataValueRange.HasValue)
+			{
+				return _cachedDataValueRange.Value;
+			}
 
-                if (min != double.MaxValue && max != double.MinValue && min != max)
-                {
-                    return (min, max);
-                }
-            }
-
-            return (0, 1);
+			return (0, 1);
         }
 
         private NumericalAxis GetAxisForSeries(SeriesData series)
@@ -466,9 +558,73 @@ namespace MGK_Analyzer.Controls
             return targetIndex;
         }
 
-        private void AddCursor_Click(object sender, RoutedEventArgs e)
-        {
-            if (DataSet == null || ChartControl == null || CursorOverlayCanvas == null) return;
+		private int GetTargetPointBudget()
+		{
+			const int minBudget = 250;
+			const int maxBudget = 1200;
+			var width = ChartControl?.ActualWidth ?? 800;
+			return (int)Math.Clamp(width, minBudget, maxBudget);
+		}
+
+		private bool CanAddMoreSeries()
+		{
+			if (ChartControl == null)
+			{
+				return true;
+			}
+
+			var activeCount = ChartControl.Series.Count(series => series.Tag is SeriesData);
+			return activeCount < MaxActiveSeriesCount;
+		}
+
+		private void ShowSeriesLimitMessage()
+		{
+			MessageBox.Show(
+				$"시리즈는 최대 {MaxActiveSeriesCount}개까지 추가할 수 있습니다.",
+				"시리즈 제한",
+				MessageBoxButton.OK,
+				MessageBoxImage.Information);
+		}
+
+		private void SetSeriesSelection(ChartSeriesViewModel viewModel, bool isSelected)
+		{
+			if (viewModel.IsSelected == isSelected)
+			{
+				return;
+			}
+
+			_isUpdatingSeriesSelection = true;
+			try
+			{
+				viewModel.IsSelected = isSelected;
+			}
+			finally
+			{
+				_isUpdatingSeriesSelection = false;
+			}
+		}
+
+		private bool HasActiveCursorDrag()
+		{
+			for (int i = 0; i < _cursorHandles.Count; i++)
+			{
+				if (_cursorHandles[i].IsDragging)
+				{
+					return true;
+				}
+			}
+			return false;
+		}
+
+		private void AddCursor_Click(object sender, RoutedEventArgs e)
+		{
+			if (DataSet == null || ChartControl == null) return;
+            const int MaxCursorCount = 5;
+            if (_cursorHandles.Count >= MaxCursorCount)
+            {
+                PerformanceLogger.Instance.LogInfo("커서는 최대 5개까지 추가할 수 있습니다.", "Chart_Display");
+                return;
+            }
 
             var cursorIndex = GetNextCursorIndex();
             var cursorTime = DataSet.GetTimeAt(cursorIndex);
@@ -478,89 +634,164 @@ namespace MGK_Analyzer.Controls
                 maxValue = minValue + 1;
             }
 
+            var cursorBrush = GetCursorColorByIndex(_cursorHandles.Count);
+
             var annotation = new VerticalLineAnnotation
             {
                 X1 = cursorTime,
                 X2 = cursorTime,
                 Y1 = minValue,
                 Y2 = maxValue,
-                Stroke = Brushes.Transparent,
-                StrokeThickness = 0
+                Stroke = cursorBrush,
+				StrokeThickness = 2.5,
+				CanDrag = true,
+				CanResize = false,
+				DraggingMode = AxisMode.Horizontal
             };
 
             ChartControl.Annotations?.Add(annotation);
 
-            var thumb = new Thumb
+            var snapshot = new CursorSnapshotViewModel
             {
-                Style = (Style?)TryFindResource("CursorThumbStyle"),
-                Width = 12,
-                Cursor = Cursors.SizeWE
+                CursorIndex = _cursorHandles.Count + 1,
+                CursorBrush = cursorBrush
             };
-            thumb.DragDelta += CursorThumb_DragDelta;
-            thumb.DragStarted += CursorThumb_DragStarted;
-            thumb.DragCompleted += CursorThumb_DragCompleted;
-            Canvas.SetZIndex(thumb, 100);
-            CursorOverlayCanvas.Children.Add(thumb);
+            SnapshotList.Add(snapshot);
 
             var handle = new ChartCursorHandle
             {
                 Annotation = annotation,
-                Thumb = thumb,
-                Index = cursorIndex
+                Index = cursorIndex,
+                Snapshot = snapshot,
+                CursorBrush = cursorBrush
             };
-            thumb.Tag = handle;
+			annotation.Tag = handle;
+			annotation.DragDelta += CursorAnnotation_DragDelta;
+			annotation.DragCompleted += CursorAnnotation_DragCompleted;
+			annotation.MouseLeftButtonDown += CursorAnnotation_MouseLeftButtonDown;
+			annotation.MouseLeftButtonUp += CursorAnnotation_MouseLeftButtonUp;
             _cursorHandles.Add(handle);
+            UpdateSnapshotForHandle(handle);
+            RefreshSnapshotOrdering();
 
             RefreshCursorHandles();
         }
 
         private void RemoveCursor_Click(object sender, RoutedEventArgs e)
         {
-            if (_cursorHandles.Count == 0 || ChartControl == null) return;
+			if (_cursorHandles.Count == 0 || ChartControl == null) return;
 
             var lastCursor = _cursorHandles[^1];
             _cursorHandles.RemoveAt(_cursorHandles.Count - 1);
-            ChartControl.Annotations?.Remove(lastCursor.Annotation);
-            CursorOverlayCanvas?.Children.Remove(lastCursor.Thumb);
+			DetachCursorAnnotation(lastCursor);
+			ChartControl.Annotations?.Remove(lastCursor.Annotation);
+            if (lastCursor.Snapshot != null)
+            {
+                SnapshotList.Remove(lastCursor.Snapshot);
+            }
+            RefreshSnapshotOrdering();
         }
 
-        private void CursorThumb_DragStarted(object sender, DragStartedEventArgs e)
-        {
-            if (sender is Thumb thumb)
-            {
-                Canvas.SetZIndex(thumb, 200);
-            }
-        }
+		private void CursorAnnotation_DragDelta(object? sender, AnnotationDragDeltaEventArgs e)
+		{
+			if (sender is not VerticalLineAnnotation annotation || annotation.Tag is not ChartCursorHandle handle || DataSet == null || e.NewValue == null)
+			{
+				return;
+			}
 
-        private void CursorThumb_DragCompleted(object sender, DragCompletedEventArgs e)
-        {
-            if (sender is Thumb thumb)
-            {
-                Canvas.SetZIndex(thumb, 100);
-            }
+			handle.IsDragging = true;
 
-            RefreshCursorHandles();
-        }
+			double axisValue;
+			var axisValueObject = e.NewValue.X1;
+			var pointer = ChartControl != null ? Mouse.GetPosition(ChartControl) : new Point(double.NaN, double.NaN);
+			switch (axisValueObject)
+			{
+				case double axisDouble:
+					axisValue = axisDouble;
+					break;
+				case DateTime axisDateTimeValue:
+					axisValue = axisDateTimeValue.ToOADate();
+					break;
+				case IConvertible convertible:
+					axisValue = convertible.ToDouble(CultureInfo.InvariantCulture);
+					break;
+				default:
+					LogCursorDebug("Annotation drag delta skipped: unsupported axis value type.");
+					return;
+			}
 
-        private void CursorThumb_DragDelta(object sender, DragDeltaEventArgs e)
-        {
-            if (sender is not Thumb thumb || thumb.Tag is not ChartCursorHandle handle || DataSet == null)
-            {
-                return;
-            }
+			if (!TryConvertAxisValueToIndex(axisValue, out var targetIndex))
+			{
+				e.Cancel = true;
+				LogCursorDebug("Annotation drag delta cancelled: unable to convert axis value to index.");
+				return;
+			}
 
-            var plotRect = GetPlotAreaRect();
-            if (plotRect.Width <= 0)
-            {
-                return;
-            }
+			handle.Index = targetIndex;
+			UpdateCursorAnnotation(handle);
 
-            var maxIndex = Math.Max(0, DataSet.TotalSamples - 1);
-            var deltaIndex = (e.HorizontalChange / plotRect.Width) * Math.Max(1, maxIndex);
-            handle.Index = Math.Clamp(handle.Index + deltaIndex, 0, maxIndex);
-            UpdateCursorAnnotation(handle);
-            UpdateCursorHandlePosition(handle, plotRect);
-        }
+			var axisDateTime = DateTime.FromOADate(axisValue);
+			var secondsOffset = (axisDateTime - DataSet.BaseTime).TotalSeconds;
+			var interval = Math.Max(DataSet.TimeInterval, 0.001f);
+			var theoreticalIndex = secondsOffset / interval;
+			var indexError = handle.Index - theoreticalIndex;
+			var pointerX = pointer.X;
+			var shouldLog = ShouldLogCursorDelta(handle, axisValue, pointerX, handle.Index, indexError, forceLog: false, out var triggerReason);
+			if (shouldLog)
+			{
+				var message = $"Drag snapshot[{triggerReason}] cursor={handle.Index:F2}, axisValue={axisValue:F5}, secondsOffset={secondsOffset:F2}s, interval={interval:F3}s, pointerX={(double.IsNaN(pointerX) ? double.NaN : pointerX):F2}, idxError={indexError:F2}";
+				LogCursorDebug(message);
+			}
+		}
+
+		private void CursorAnnotation_DragCompleted(object? sender, AnnotationDragCompletedEventArgs e)
+		{
+			if (sender is not VerticalLineAnnotation annotation || annotation.Tag is not ChartCursorHandle handle)
+			{
+				return;
+			}
+
+			var wasDragging = handle.IsDragging;
+			handle.IsDragging = false;
+			LogCursorDebug($"Annotation drag completed for cursor index={handle.Index:F2}");
+			UpdateCursorAnnotation(handle);
+			if (wasDragging || _pendingSnapshotRefresh)
+			{
+				RefreshAllSnapshots();
+			}
+		}
+
+		private void CursorAnnotation_MouseLeftButtonDown(object? sender, MouseButtonEventArgs e)
+		{
+			if (sender is not VerticalLineAnnotation annotation || annotation.Tag is not ChartCursorHandle handle)
+			{
+				return;
+			}
+
+			handle.IsDragging = true;
+			var pointer = ChartControl != null ? e.GetPosition(ChartControl) : new Point(double.NaN, double.NaN);
+			var axisValue = annotation.X1 is DateTime dt ? dt.ToString("HH:mm:ss.fff", CultureInfo.InvariantCulture) : annotation.X1?.ToString() ?? "<null>";
+			LogCursorDebug($"Annotation mouse down -> cursorIndex={handle.Index:F2}, pointer=({pointer.X:F2},{pointer.Y:F2}), axis={axisValue}");
+		}
+
+		private void CursorAnnotation_MouseLeftButtonUp(object? sender, MouseButtonEventArgs e)
+		{
+			if (sender is not VerticalLineAnnotation annotation || annotation.Tag is not ChartCursorHandle handle)
+			{
+				return;
+			}
+
+			var wasDragging = handle.IsDragging;
+			handle.IsDragging = false;
+			var pointer = ChartControl != null ? e.GetPosition(ChartControl) : new Point(double.NaN, double.NaN);
+			var axisValue = annotation.X1 is DateTime dt ? dt.ToString("HH:mm:ss.fff", CultureInfo.InvariantCulture) : annotation.X1?.ToString() ?? "<null>";
+			LogCursorDebug($"Annotation mouse up -> cursorIndex={handle.Index:F2}, pointer=({pointer.X:F2},{pointer.Y:F2}), axis={axisValue}");
+			UpdateCursorAnnotation(handle);
+			if (wasDragging || _pendingSnapshotRefresh)
+			{
+				RefreshAllSnapshots();
+			}
+		}
 
         private void UpdateCursorAnnotation(ChartCursorHandle handle)
         {
@@ -583,83 +814,396 @@ namespace MGK_Analyzer.Controls
                 handle.Annotation.X2 = cursorTime;
                 handle.Annotation.Y1 = minValue;
                 handle.Annotation.Y2 = maxValue;
+                handle.Annotation.StrokeThickness = 2.5;
+                handle.Annotation.Stroke = handle.CursorBrush;
             }
+
+			if (!handle.IsDragging)
+			{
+				UpdateSnapshotForHandle(handle);
+			}
         }
 
-        private void UpdateCursorHandlePosition(ChartCursorHandle handle, Rect plotRect)
+
+
+		private void RefreshCursorHandles()
+		{
+			if (_cursorHandles.Count == 0 || DataSet == null || ChartControl == null)
+			{
+				return;
+			}
+
+			if (_isRefreshingCursorHandles || HasActiveCursorDrag())
+			{
+				return;
+			}
+
+			try
+			{
+				_isRefreshingCursorHandles = true;
+				foreach (var handle in _cursorHandles)
+				{
+					UpdateCursorAnnotation(handle);
+				}
+			}
+			finally
+			{
+				_isRefreshingCursorHandles = false;
+			}
+		}
+
+        private void RefreshSnapshotOrdering()
         {
-            if (CursorOverlayCanvas == null || DataSet == null)
+            for (int i = 0; i < _cursorHandles.Count; i++)
             {
-                return;
+                var handle = _cursorHandles[i];
+                if (handle.Snapshot != null)
+                {
+                    handle.Snapshot.CursorIndex = i + 1;
+                }
             }
-
-            var denominator = Math.Max(1, DataSet.TotalSamples - 1);
-            var ratio = denominator == 0 ? 0 : handle.Index / denominator;
-            var targetX = plotRect.Left + ratio * plotRect.Width;
-
-            Canvas.SetLeft(handle.Thumb, targetX - handle.Thumb.Width / 2);
-            Canvas.SetTop(handle.Thumb, plotRect.Top);
-            handle.Thumb.Height = plotRect.Height;
-            handle.Thumb.Visibility = Visibility.Visible;
         }
 
-        private void RefreshCursorHandles()
+		private void RefreshAllSnapshots()
+		{
+			if (_cursorHandles.Count == 0 || DataSet == null)
+			{
+				_pendingSnapshotRefresh = false;
+				return;
+			}
+
+			if (HasActiveCursorDrag())
+			{
+				_pendingSnapshotRefresh = true;
+				return;
+			}
+
+			_pendingSnapshotRefresh = false;
+			foreach (var handle in _cursorHandles)
+			{
+				if (handle.IsDragging)
+				{
+					continue;
+				}
+				UpdateSnapshotForHandle(handle);
+			}
+		}
+
+        private void UpdateSnapshotForHandle(ChartCursorHandle handle)
         {
-            if (CursorOverlayCanvas == null || _cursorHandles.Count == 0 || DataSet == null)
+			if (DataSet == null || handle.Snapshot == null || handle.IsDragging)
             {
                 return;
             }
 
-            var plotRect = GetPlotAreaRect();
-            if (plotRect.Width <= 0 || plotRect.Height <= 0)
+            var sampleIndex = (int)Math.Clamp(Math.Round(handle.Index), 0, Math.Max(0, DataSet.TotalSamples - 1));
+            var cursorTime = DataSet.TotalSamples > 0 ? DataSet.GetTimeAt(sampleIndex) : default;
+            handle.Snapshot.CursorTime = cursorTime;
+
+            var activeSeries = GetActiveSeriesData().ToList();
+            UpdateSnapshotSeriesValues(handle.Snapshot, activeSeries, sampleIndex);
+        }
+
+		private void UpdateSnapshotSeriesValues(CursorSnapshotViewModel snapshot, List<SeriesData> activeSeries, int sampleIndex)
+        {
+			var limitedSeries = activeSeries.Take(MaxSnapshotSeriesValues).ToList();
+            for (int i = snapshot.SeriesValues.Count - 1; i >= 0; i--)
             {
-                return;
+                var existing = snapshot.SeriesValues[i];
+				if (!limitedSeries.Any(s => string.Equals(s.Name, existing.SeriesName, StringComparison.OrdinalIgnoreCase)))
+                {
+                    snapshot.SeriesValues.RemoveAt(i);
+                }
             }
 
-            foreach (var handle in _cursorHandles)
+			foreach (var series in limitedSeries)
             {
-                UpdateCursorAnnotation(handle);
-                UpdateCursorHandlePosition(handle, plotRect);
+                var valueText = GetSeriesValueText(series, sampleIndex);
+                var unitText = series.Unit ?? string.Empty;
+                var entry = snapshot.SeriesValues.FirstOrDefault(v => string.Equals(v.SeriesName, series.Name, StringComparison.OrdinalIgnoreCase));
+                if (entry == null)
+                {
+                    snapshot.SeriesValues.Add(new CursorSeriesValueViewModel
+                    {
+                        SeriesName = series.Name,
+                        Unit = unitText,
+                        ValueText = valueText
+                    });
+                }
+                else
+                {
+                    entry.Unit = unitText;
+                    entry.ValueText = valueText;
+                }
             }
         }
 
-        private Rect GetPlotAreaRect()
+        private IEnumerable<SeriesData> GetActiveSeriesData()
         {
             if (ChartControl == null)
             {
-                return new Rect();
+                yield break;
             }
 
-            if (PlotAreaClipRectProperty?.GetValue(ChartControl) is Rect clipRect && !clipRect.IsEmpty)
+            foreach (var chartSeries in ChartControl.Series)
             {
-                return clipRect;
+                if (chartSeries.Tag is SeriesData data)
+                {
+                    yield return data;
+                }
+            }
+        }
+
+        private string GetSeriesValueText(SeriesData series, int sampleIndex)
+        {
+            if (series.DataType == typeof(bool))
+            {
+                if (series.BitValues == null || sampleIndex < 0 || sampleIndex >= series.BitValues.Length)
+                {
+                    return "-";
+                }
+
+                return series.BitValues[sampleIndex] ? "On" : "Off";
             }
 
-            return new Rect(0, 0, ChartControl.ActualWidth, ChartControl.ActualHeight);
+            if (series.Values == null || sampleIndex < 0 || sampleIndex >= series.Values.Length)
+            {
+                return "-";
+            }
+
+            var value = series.Values[sampleIndex];
+            if (float.IsNaN(value) || float.IsInfinity(value))
+            {
+                return "-";
+            }
+
+            return value.ToString("0.###", CultureInfo.InvariantCulture);
+        }
+
+
+        private bool TryConvertAxisValueToIndex(double axisValue, out int sampleIndex)
+        {
+            sampleIndex = 0;
+            if (DataSet == null || DataSet.TotalSamples <= 0)
+            {
+                return false;
+            }
+
+            var time = DateTime.FromOADate(axisValue);
+            var interval = Math.Max(DataSet.TimeInterval, 0.001f);
+            var seconds = (time - DataSet.BaseTime).TotalSeconds;
+            var index = (int)Math.Round(seconds / interval);
+            sampleIndex = (int)Math.Clamp(index, 0, DataSet.TotalSamples - 1);
+            return true;
+        }
+
+		private static bool ShouldLogCursorDelta(
+			ChartCursorHandle handle,
+			double axisValue,
+			double pointerX,
+			double targetIndex,
+			double indexError,
+			bool forceLog,
+			out string triggerReason)
+		{
+			const double axisThreshold = 0.03; // ~= 43.2 min in OADate units
+			const double indexThreshold = 160;
+			const double pointerThreshold = 80; // pixels
+			const double driftThreshold = 3.0; // indices
+			var now = DateTime.UtcNow;
+			var elapsed = now - handle.LastLogTimestamp;
+			var axisChanged = double.IsNaN(handle.LastLoggedAxisValue) || Math.Abs(axisValue - handle.LastLoggedAxisValue) >= axisThreshold;
+			var indexChanged = double.IsNaN(handle.LastLoggedIndex) || Math.Abs(targetIndex - handle.LastLoggedIndex) >= indexThreshold;
+			var pointerChanged = !double.IsNaN(pointerX) && (double.IsNaN(handle.LastLoggedPointerX) || Math.Abs(pointerX - handle.LastLoggedPointerX) >= pointerThreshold);
+			var driftDetected = Math.Abs(indexError) >= driftThreshold;
+			var minInterval = handle.IsDragging ? TimeSpan.FromSeconds(1.25) : TimeSpan.FromSeconds(0.9);
+			if (elapsed < minInterval)
+			{
+				axisChanged = false;
+				indexChanged = false;
+				pointerChanged = false;
+			}
+			var timeExpired = elapsed >= (handle.IsDragging ? TimeSpan.FromSeconds(4.5) : TimeSpan.FromSeconds(3));
+			triggerReason = string.Empty;
+
+			bool shouldLog = forceLog || driftDetected || axisChanged || indexChanged || pointerChanged || timeExpired;
+			if (shouldLog)
+			{
+				handle.LastLoggedAxisValue = axisValue;
+				handle.LastLoggedIndex = targetIndex;
+				handle.LastLoggedPointerX = pointerX;
+				handle.LastLogTimestamp = now;
+				triggerReason = driftDetected ? "drift" :
+					axisChanged ? "axis" :
+					indexChanged ? "index" :
+					pointerChanged ? "pointer" :
+					timeExpired ? "interval" : "forced";
+			}
+			return shouldLog;
+		}
+
+        private void LogCursorDebug(string message)
+        {
+			if (!EnableCursorDebugLogging)
+			{
+				return;
+			}
+            PerformanceLogger.Instance.LogInfo(message, "Cursor_Debug");
+            Console.WriteLine($"[CursorDebug] {message}");
         }
 
         private void ClearCursorHandles()
         {
-            if (ChartControl != null)
+			if (ChartControl != null)
+			{
+				foreach (var handle in _cursorHandles)
+				{
+					DetachCursorAnnotation(handle);
+					if (handle.Annotation != null)
+					{
+						ChartControl.Annotations?.Remove(handle.Annotation);
+					}
+				}
+			}
+
+            _cursorHandles.Clear();
+            SnapshotList.Clear();
+        }
+
+		private void DetachCursorAnnotation(ChartCursorHandle handle)
+		{
+			if (handle.Annotation == null)
+			{
+				return;
+			}
+
+			handle.Annotation.DragDelta -= CursorAnnotation_DragDelta;
+			handle.Annotation.DragCompleted -= CursorAnnotation_DragCompleted;
+			handle.Annotation.MouseLeftButtonDown -= CursorAnnotation_MouseLeftButtonDown;
+			handle.Annotation.MouseLeftButtonUp -= CursorAnnotation_MouseLeftButtonUp;
+		}
+
+	private sealed class ChartCursorHandle
+	{
+		public VerticalLineAnnotation? Annotation { get; set; }
+		public double Index { get; set; }
+		public CursorSnapshotViewModel? Snapshot { get; set; }
+		public Brush CursorBrush { get; set; } = Brushes.Crimson;
+		public double LastLoggedAxisValue { get; set; } = double.NaN;
+		public double LastLoggedIndex { get; set; } = double.NaN;
+		public double LastLoggedPointerX { get; set; } = double.NaN;
+		public DateTime LastLogTimestamp { get; set; } = DateTime.MinValue;
+		public bool IsDragging { get; set; }
+	}
+
+        public sealed class CursorSnapshotViewModel : INotifyPropertyChanged
+        {
+            private int _cursorIndex;
+            private DateTime _cursorTime;
+            private Brush _cursorBrush = Brushes.Gray;
+
+            public int CursorIndex
             {
-                foreach (var handle in _cursorHandles)
+                get => _cursorIndex;
+                set
                 {
-                    if (handle.Annotation != null)
+                    if (_cursorIndex != value)
                     {
-                        ChartControl.Annotations?.Remove(handle.Annotation);
+                        _cursorIndex = value;
+                        OnPropertyChanged();
+                        OnPropertyChanged(nameof(CursorLabel));
                     }
                 }
             }
 
-            _cursorHandles.Clear();
-            CursorOverlayCanvas?.Children.Clear();
+            public DateTime CursorTime
+            {
+                get => _cursorTime;
+                set
+                {
+                    if (_cursorTime != value)
+                    {
+                        _cursorTime = value;
+                        OnPropertyChanged();
+                        OnPropertyChanged(nameof(CursorTimeDisplay));
+                    }
+                }
+            }
+
+            public string CursorLabel => $"Cursor {_cursorIndex}";
+            public string CursorTimeDisplay => _cursorTime == default ? "-" : _cursorTime.ToString("yyyy-MM-dd HH:mm:ss.fff");
+            public Brush CursorBrush
+            {
+                get => _cursorBrush;
+                set
+                {
+                    if (_cursorBrush != value)
+                    {
+                        _cursorBrush = value;
+                        OnPropertyChanged();
+                    }
+                }
+            }
+
+            public ObservableCollection<CursorSeriesValueViewModel> SeriesValues { get; } = new();
+
+            public event PropertyChangedEventHandler? PropertyChanged;
+            private void OnPropertyChanged([CallerMemberName] string? propertyName = null)
+            {
+                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+            }
         }
 
-        private sealed class ChartCursorHandle
+        public sealed class CursorSeriesValueViewModel : INotifyPropertyChanged
         {
-            public VerticalLineAnnotation? Annotation { get; set; }
-            public Thumb Thumb { get; set; } = null!;
-            public double Index { get; set; }
+            private string _seriesName = string.Empty;
+            private string _unit = string.Empty;
+            private string _valueText = "-";
+
+            public string SeriesName
+            {
+                get => _seriesName;
+                set
+                {
+                    if (_seriesName != value)
+                    {
+                        _seriesName = value;
+                        OnPropertyChanged();
+                    }
+                }
+            }
+
+            public string Unit
+            {
+                get => _unit;
+                set
+                {
+                    if (_unit != value)
+                    {
+                        _unit = value;
+                        OnPropertyChanged();
+                    }
+                }
+            }
+
+            public string ValueText
+            {
+                get => _valueText;
+                set
+                {
+                    if (_valueText != value)
+                    {
+                        _valueText = value;
+                        OnPropertyChanged();
+                    }
+                }
+            }
+
+            public event PropertyChangedEventHandler? PropertyChanged;
+            private void OnPropertyChanged([CallerMemberName] string? propertyName = null)
+            {
+                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+            }
         }
 
         private bool GetBoolValue(System.Collections.BitArray? bitValues, int index)
@@ -667,6 +1211,16 @@ namespace MGK_Analyzer.Controls
             if (bitValues == null) return false;
             if (index < 0 || index >= bitValues.Length) return false;
             return bitValues[index];
+        }
+
+        private Brush GetCursorColorByIndex(int index)
+        {
+            if (CursorColorPalette.Length == 0)
+            {
+                return Brushes.Crimson;
+            }
+
+            return CursorColorPalette[index % CursorColorPalette.Length];
         }
 
         // 타이틀바 드래그
