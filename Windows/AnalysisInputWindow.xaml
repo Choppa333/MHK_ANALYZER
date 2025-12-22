@@ -1,0 +1,202 @@
+<Window x:Class="MGK_Analyzer.Windows.AnalysisInputWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:input="clr-namespace:Syncfusion.Windows.Controls.Input;assembly=Syncfusion.SfInput.WPF"
+        xmlns:vm="clr-namespace:MGK_Analyzer.ViewModels"
+        mc:Ignorable="d"
+        Title="&#xC2DC;&#xD5D8; &#xBD84;&#xC11D; &#xC785;&#xB825;"
+        Width="920" Height="820"
+        WindowStartupLocation="CenterOwner">
+
+    <Window.DataContext>
+        <vm:AnalysisInputViewModel />
+    </Window.DataContext>
+
+    <Grid Margin="16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <TextBlock Grid.Row="0" Text="&#xC2DC;&#xD5D8; &#xBD84;&#xC11D; &#xC785;&#xB825;" FontSize="18" FontWeight="SemiBold" Margin="0,0,0,12" />
+
+        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+            <StackPanel>
+                <GroupBox Header="&#xC2DC;&#xD5D8; &#xB370;&#xC774;&#xD130; &#xC5C5;&#xB85C;&#xB4DC;" Margin="0,0,0,12" Padding="12">
+                    <StackPanel>
+
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="8"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="8"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+
+                            <Button Grid.Row="0" Grid.Column="0"
+                                    Content="&#xBB34;&#xBD80;&#xD558; CSV &#xC120;&#xD0DD;"
+                                    Command="{Binding BrowseNoLoadCsvCommand}"
+                                    Padding="10,6"/>
+                            <input:SfTextBoxExt Grid.Row="0" Grid.Column="2"
+                                                Text="{Binding NoLoadCsvPath, UpdateSourceTrigger=PropertyChanged}"
+                                                IsReadOnly="True" />
+
+                            <Button Grid.Row="2" Grid.Column="0"
+                                    Content="&#xBD80;&#xD558; CSV &#xC120;&#xD0DD;"
+                                    Command="{Binding BrowseLoadCsvCommand}"
+                                    Padding="10,6"/>
+                            <input:SfTextBoxExt Grid.Row="2" Grid.Column="2"
+                                                Text="{Binding LoadCsvPath, UpdateSourceTrigger=PropertyChanged}"
+                                                IsReadOnly="True" />
+                        </Grid>
+
+                        <Border Margin="0,10,0,0" Padding="8" Background="#10FF0000" CornerRadius="4" Visibility="Collapsed">
+                            <Border.Style>
+                                <Style TargetType="Border">
+                                    <Setter Property="Visibility" Value="Collapsed" />
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding HasUploadValidationError}" Value="True">
+                                            <Setter Property="Visibility" Value="Visible" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Border.Style>
+                            <TextBlock Text="&#xBB34;&#xBD80;&#xD558;/&#xBD80;&#xD558; CSV &#xD30C;&#xC77C;&#xC744; &#xBAA8;&#xB450; &#xC120;&#xD0DD;&#xD558;&#xC138;&#xC694;." Foreground="#C00000" />
+                        </Border>
+                    </StackPanel>
+                </GroupBox>
+
+                <GroupBox Header="&#xBAA8;&#xD130; &#xC815;&#xACA9; &#xC815;&#xBCF4;" Margin="0,0,0,12" Padding="12">
+                    <StackPanel>
+
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="12"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="8"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="8"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="8"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="8"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+
+                            <StackPanel Grid.Row="0" Grid.Column="0">
+                                <TextBlock Text="&#xC815;&#xACA9; &#xC804;&#xC555; (V)"/>
+                                <TextBox Text="{Binding RatedVoltage, UpdateSourceTrigger=PropertyChanged}" />
+                            </StackPanel>
+                            <StackPanel Grid.Row="0" Grid.Column="2">
+                                <TextBlock Text="&#xC815;&#xACA9; &#xC804;&#xB958; (A)"/>
+                                <TextBox Text="{Binding RatedCurrent, UpdateSourceTrigger=PropertyChanged}" />
+                            </StackPanel>
+
+                            <StackPanel Grid.Row="2" Grid.Column="0">
+                                <TextBlock Text="&#xC815;&#xACA9; &#xC18D;&#xB3C4; (rpm)"/>
+                                <TextBox Text="{Binding RatedSpeedRpm, UpdateSourceTrigger=PropertyChanged}" />
+                            </StackPanel>
+                            <StackPanel Grid.Row="2" Grid.Column="2">
+                                <TextBlock Text="&#xC815;&#xACA9; &#xD1A0;&#xD06C; (Nm)"/>
+                                <TextBox Text="{Binding RatedTorqueNm, UpdateSourceTrigger=PropertyChanged}" />
+                            </StackPanel>
+
+                            <StackPanel Grid.Row="4" Grid.Column="0">
+                                <TextBlock Text="&#xC815;&#xACA9; &#xC8FC;&#xD30C;&#xC218; (Hz)"/>
+                                <TextBox Text="{Binding RatedFrequencyHz, UpdateSourceTrigger=PropertyChanged}" />
+                            </StackPanel>
+                            <StackPanel Grid.Row="4" Grid.Column="2">
+                                <TextBlock Text="&#xADF9;&#xC218;"/>
+                                <TextBox Text="{Binding PoleCount, UpdateSourceTrigger=PropertyChanged}" />
+                            </StackPanel>
+
+                            <StackPanel Grid.Row="6" Grid.Column="0">
+                                <TextBlock Text="&#xC815;&#xACA9; &#xCD9C;&#xB825; (kW)"/>
+                                <TextBox Text="{Binding RatedPowerKw, UpdateSourceTrigger=PropertyChanged}" />
+                            </StackPanel>
+                            <StackPanel Grid.Row="6" Grid.Column="2">
+                                <TextBlock Text="&#xAD8C;&#xC120; &#xC7AC;&#xC9C8;"/>
+                                <ComboBox ItemsSource="{Binding WindingMaterials}" SelectedItem="{Binding SelectedWindingMaterial}" />
+                            </StackPanel>
+
+                            <StackPanel Grid.Row="8" Grid.Column="0">
+                                <TextBlock Text="&#xAD8C;&#xC120;&#xC800;&#xD56D; (Ohm)"/>
+                                <TextBox Text="{Binding WindingResistanceOhm, UpdateSourceTrigger=PropertyChanged}" />
+                            </StackPanel>
+                        </Grid>
+                    </StackPanel>
+                </GroupBox>
+
+                <GroupBox Header="&#xC2DC;&#xD5D8; &#xBA54;&#xD0C0;&#xB370;&#xC774;&#xD130;" Padding="12">
+                    <StackPanel>
+
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="12"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0">
+                                <TextBlock Text="&#xC2DC;&#xD5D8;&#xC77C;"/>
+                                <input:SfDatePicker Value="{Binding TestDate}" />
+                            </StackPanel>
+                            <StackPanel Grid.Column="2">
+                                <TextBlock Text="&#xD14C;&#xC2A4;&#xD130;&#xBA85;"/>
+                                <input:SfTextBoxExt Text="{Binding TesterName, UpdateSourceTrigger=PropertyChanged}" />
+                            </StackPanel>
+                        </Grid>
+
+                        <TextBlock Text="&#xBA54;&#xBAA8;" Margin="0,10,0,4"/>
+                        <RichTextBox Height="120" />
+
+                        <Expander Header="&#xCD94;&#xAC00; &#xD544;&#xB4DC;" Margin="0,10,0,0">
+                            <StackPanel Margin="0,8,0,0">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="12"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+
+                                        <StackPanel Grid.Column="0">
+                                            <TextBlock Text="&#xC628;&#xB3C4; (&#xB3C4;C)"/>
+                                            <TextBox Text="{Binding TemperatureC, UpdateSourceTrigger=PropertyChanged}" />
+                                        </StackPanel>
+
+                                        <StackPanel Grid.Column="2">
+                                            <TextBlock Text="&#xC2B5;&#xB3C4; (%)"/>
+                                            <TextBox Text="{Binding HumidityPercent, UpdateSourceTrigger=PropertyChanged}" />
+                                        </StackPanel>
+                                    </Grid>
+
+                                    <TextBlock Text="&#xBE44;&#xACE0;" Margin="0,10,0,4"/>
+                                    <input:SfTextBoxExt Text="{Binding Remarks, UpdateSourceTrigger=PropertyChanged}" AcceptsReturn="True" Height="60" />
+                            </StackPanel>
+                        </Expander>
+                    </StackPanel>
+                </GroupBox>
+            </StackPanel>
+        </ScrollViewer>
+
+        <DockPanel Grid.Row="2" Margin="0,12,0,0">
+            <TextBlock VerticalAlignment="Center" Foreground="#666" Text="&#xC800;&#xC7A5; &#xB85C;&#xC9C1;&#xC740; &#xCD94;&#xD6C4; &#xAD6C;&#xD604; &#xC608;&#xC815;&#xC785;&#xB2C8;&#xB2E4;." />
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" DockPanel.Dock="Right">
+                <Button Content="&#xC800;&#xC7A5;" Margin="0,0,8,0" Padding="12,6"
+                        Command="{Binding SaveCommand}"
+                        IsEnabled="{Binding CanSave}" />
+                <Button Content="&#xB2EB;&#xAE30;" Padding="12,6" IsCancel="True" />
+            </StackPanel>
+        </DockPanel>
+    </Grid>
+</Window>

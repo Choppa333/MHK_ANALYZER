@@ -83,7 +83,11 @@
             <!-- Content Area -->
             <Grid Grid.Row="1" Grid.RowSpan="2">
                 <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition x:Name="LeftPanelColumn"
+                                      Width="320"
+                                      MinWidth="0"
+                                      MaxWidth="600"/>
+                    <ColumnDefinition x:Name="LeftPanelSplitterColumn" Width="5"/>
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
@@ -92,12 +96,12 @@
                 <Border Grid.Column="0" x:Name="LeftPanelContainer" ClipToBounds="True">
                     <Grid>
                         <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="25"/>
+                            <ColumnDefinition Width="Auto"/>
                             <ColumnDefinition Width="*"/>
                         </Grid.ColumnDefinitions>
 
                         <!-- Collapsed Tab Button (Left) -->
-                        <Border Grid.Column="0" x:Name="LeftPanelTab"
+                        <Border Grid.Column="0" x:Name="LeftPanelTab" Width="12" MinWidth="10"
                                 Background="#FF2D2D30"
                                 BorderBrush="#FF3E3E42" BorderThickness="0,0,1,0"
                                 Cursor="Hand" Visibility="Collapsed"
@@ -117,7 +121,7 @@
 
                         <!-- Left Panel -->
                         <Border Grid.Column="1" x:Name="LeftPanel"
-                                Width="260" Background="WhiteSmoke"
+                                MinWidth="220" Background="WhiteSmoke"
                                 BorderBrush="LightGray" BorderThickness="0,0,1,0"
                                 MouseLeave="LeftPanel_MouseLeave">
                             <Grid>
@@ -229,19 +233,97 @@
                                         </Grid>
                                     </TabItem>
                                     <TabItem Header="Data Table" FontFamily="Malgun Gothic" FontSize="11">
-                                        <Grid>
-                                            <Border Background="White"
-                                                    BorderBrush="#FFDDDDDD"
-                                                    BorderThickness="1"
-                                                    CornerRadius="3" Padding="10"
-                                                    Margin="5">
-                                                <StackPanel>
-                                                    <TextBlock Text="Data table placeholder"
-                                                               FontWeight="SemiBold"/>
-                                                    <TextBlock Text="Data table details will appear here later."
-                                                               FontSize="10" Foreground="Gray"/>
+                                        <Grid Margin="0,5,0,0">
+                                            <Grid.RowDefinitions>
+                                                <RowDefinition Height="Auto"/>
+                                                <RowDefinition Height="*"/>
+                                            </Grid.RowDefinitions>
+
+                                            <Grid Grid.Row="0" Margin="5,0,5,5">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                </Grid.ColumnDefinitions>
+
+                                                <Border Grid.Column="0"
+                                                        Background="#FFF6F6F6"
+                                                        BorderBrush="#FFDDDDDD"
+                                                        BorderThickness="1"
+                                                        CornerRadius="3"
+                                                        Padding="6"
+                                                        Margin="0,0,5,0">
+                                                    <TextBlock Text="{Binding DataTableStatus, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                               FontWeight="SemiBold"
+                                                               FontSize="11"
+                                                               Foreground="#FF444444"/>
+                                                </Border>
+
+                                                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,5,0">
+                                                    <Button Content="Prev" Padding="10,4" MinWidth="50" Click="PreviousPage_Click"/>
+                                                    <Button Content="Next" Padding="10,4" MinWidth="50" Margin="4,0,0,0" Click="NextPage_Click"/>
+                                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="10,0,0,0">
+                                                        <TextBlock Text="Page" VerticalAlignment="Center" FontSize="11"/>
+                                                        <TextBox x:Name="PageNumberTextBox" Width="40" Height="22" Margin="4,0,0,0" VerticalContentAlignment="Center"/>
+                                                        <TextBlock Text="/" VerticalAlignment="Center" FontSize="11" Margin="4,0,0,0"/>
+                                                        <TextBlock Text="{Binding TotalPageCount, RelativeSource={RelativeSource AncestorType=UserControl}}" VerticalAlignment="Center" FontSize="11" Margin="2,0,0,0"/>
+                                                        <Button Content="Go" Padding="8,2" Margin="6,0,0,0" Click="GoToPage_Click"/>
+                                                    </StackPanel>
                                                 </StackPanel>
-                                            </Border>
+
+                                                <Button Grid.Column="2"
+                                                        Content="Export to Excel"
+                                                        Padding="12,4"
+                                                        Margin="0,0,0,0"
+                                                        FontSize="11"
+                                                        Click="ExportDataTable_Click"
+                                                        ToolTip="Save the current data table to an Excel file."/>
+                                            </Grid>
+
+                                            <Grid Grid.Row="1">
+                                                <syncfusion:SfDataGrid x:Name="DataTableGrid"
+                                                                       ItemsSource="{Binding DataTableView, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                                       AutoGenerateColumns="True"
+                                                                       AllowFiltering="True"
+                                                                       AllowSorting="True"
+                                                                       AllowResizingColumns="True"
+                                                                       SelectionUnit="Row"
+                                                                       NavigationMode="Row"
+                                                                       ColumnSizer="Auto"
+                                                                       IsReadOnly="True"
+                                                                       FontFamily="Malgun Gothic"
+                                                                       FontSize="11"
+                                                                       Margin="5"
+                                                                       EnableDataVirtualization="True">
+                                                    <syncfusion:SfDataGrid.Style>
+                                                        <Style TargetType="syncfusion:SfDataGrid">
+                                                            <Setter Property="Visibility" Value="Visible"/>
+                                                            <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding DataTableView, RelativeSource={RelativeSource AncestorType=UserControl}}" Value="{x:Null}">
+                                                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                                                </DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </syncfusion:SfDataGrid.Style>
+                                                </syncfusion:SfDataGrid>
+
+                                                <TextBlock Text="No data available."
+                                                           HorizontalAlignment="Center"
+                                                           VerticalAlignment="Center"
+                                                           Foreground="Gray"
+                                                           FontStyle="Italic">
+                                                    <TextBlock.Style>
+                                                        <Style TargetType="TextBlock">
+                                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                                            <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding DataTableView, RelativeSource={RelativeSource AncestorType=UserControl}}" Value="{x:Null}">
+                                                                    <Setter Property="Visibility" Value="Visible"/>
+                                                                </DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </TextBlock.Style>
+                                                </TextBlock>
+                                            </Grid>
                                         </Grid>
                                     </TabItem>
                                 </TabControl>
@@ -250,12 +332,25 @@
                     </Grid>
                 </Border>
 
-                <!-- Syncfusion Chart -->
-                <Grid Grid.Column="1">
+                <!-- Resizable Separator -->
+                <GridSplitter Grid.Column="1"
+                              Width="5"
+                              Background="#FFDDDDDD"
+                              HorizontalAlignment="Stretch"
+                              VerticalAlignment="Stretch"
+                              ShowsPreview="True"
+                              ResizeBehavior="PreviousAndNext"
+                              ResizeDirection="Columns"
+                              IsTabStop="False"
+                              DragCompleted="LeftPanelSplitter_DragCompleted"/>
+
+                <!-- Syncfusion Chart (with cursor overlay) -->
+                <Grid Grid.Column="2">
                     <Grid Margin="5">
-                        <syncfusion:SfChart x:Name="ChartControl" 
-                                           Panel.ZIndex="0"
-                                           FontFamily="Malgun Gothic">
+                        <Grid>
+                            <syncfusion:SfChart x:Name="ChartControl" 
+                                               Panel.ZIndex="0"
+                                               FontFamily="Malgun Gothic">
                             <syncfusion:SfChart.PrimaryAxis>
                                 <syncfusion:DateTimeAxis Header="Time" 
                                                         LabelFormat="HH:mm:ss"
@@ -272,12 +367,19 @@
                                                        FontFamily="Malgun Gothic"
                                                        FontSize="10"/>
                             </syncfusion:SfChart.Legend>
-                        </syncfusion:SfChart>
+                            </syncfusion:SfChart>
+
+                            <Canvas x:Name="CursorOverlay"
+                                    Panel.ZIndex="10"
+                                    IsHitTestVisible="False"
+                                    Width="{Binding ActualWidth, ElementName=ChartControl}"
+                                    Height="{Binding ActualHeight, ElementName=ChartControl}"/>
+                        </Grid>
                     </Grid>
                 </Grid>
 
                 <!-- Management Panel Container -->
-                <Border Grid.Column="2" x:Name="ManagementPanelContainer" ClipToBounds="True">
+                <Border Grid.Column="3" x:Name="ManagementPanelContainer" ClipToBounds="True">
                     <Grid>
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*"/>

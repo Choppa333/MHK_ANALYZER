@@ -53,6 +53,16 @@
     </None>
   </ItemGroup>
 
+  <ItemGroup>
+    <Page Update="Controls\MdiNTCurveChartWindow.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Compile Update="Controls\MdiNTCurveChartWindow.xaml.cs">
+      <DependentUpon>MdiNTCurveChartWindow.xaml</DependentUpon>
+    </Compile>
+  </ItemGroup>
+
   <!-- Add new sample project to repo as standalone project (no direct reference here) -->
 
 </Project>

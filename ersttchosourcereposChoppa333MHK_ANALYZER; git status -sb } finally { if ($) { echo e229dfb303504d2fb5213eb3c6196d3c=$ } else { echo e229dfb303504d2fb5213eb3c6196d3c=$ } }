@@ -1,0 +1,20 @@
+[1mdiff --git a/App.xaml.cs b/App.xaml.cs[m
+[1mindex 80d7b6b..3a2c630 100644[m
+[1m--- a/App.xaml.cs[m
+[1m+++ b/App.xaml.cs[m
+[36m@@ -3,6 +3,7 @@[m [musing System.Data;[m
+ using System.Runtime.InteropServices;[m
+ using System.Windows;[m
+ using Syncfusion.Licensing;[m
+[32m+[m[32musing Syncfusion.SfSkinManager;[m
+ [m
+ namespace MGK_Analyzer[m
+ {[m
+[36m@@ -18,6 +19,7 @@[m [mnamespace MGK_Analyzer[m
+         {[m
+             // Syncfusion Community License 등록[m
+             SyncfusionLicenseProvider.RegisterLicense("Ngo9BigBOggjHTQxAR8/V1JFaF5cXGRCf1FpRmJGdld5fUVHYVZUTXxaS00DNHVRdkdmWXZed3RQQmBdUkJ+XEBWYEg=");[m
+[32m+[m[32m            SfSkinManager.ApplyStylesOnApplication = true;[m
+             [m
+ #if DEBUG[m
+             try { AllocConsole(); } catch { }[m

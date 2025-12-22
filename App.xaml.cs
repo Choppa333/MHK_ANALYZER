@@ -3,6 +3,7 @@ using System.Data;
 using System.Runtime.InteropServices;
 using System.Windows;
 using Syncfusion.Licensing;
+using Syncfusion.SfSkinManager;
 
 namespace MGK_Analyzer
 {
@@ -18,6 +19,7 @@ namespace MGK_Analyzer
         {
             // Syncfusion Community License 등록
             SyncfusionLicenseProvider.RegisterLicense("Ngo9BigBOggjHTQxAR8/V1JFaF5cXGRCf1FpRmJGdld5fUVHYVZUTXxaS00DNHVRdkdmWXZed3RQQmBdUkJ+XEBWYEg=");
+            SfSkinManager.ApplyStylesOnApplication = true;
             
 #if DEBUG
             try { AllocConsole(); } catch { }

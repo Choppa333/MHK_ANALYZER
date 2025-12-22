@@ -34,6 +34,11 @@ namespace MGK_Analyzer
         private LogViewerWindow? _logViewerWindow;
         private int _chartWindowCount = 0;
         private MdiWindowManager? _mdiWindowManager;
+        private enum ChartWindowType
+        {
+            Standard,
+            NtCurve
+        }
 
         public MainWindow()
         {
@@ -171,7 +176,12 @@ namespace MGK_Analyzer
             }
         }
 
-        private async Task LoadCsvAndDisplayChartAsync(string filePath, string actionTitle)
+        private async Task LoadCsvAndDisplayChartAsync(
+            string filePath,
+            string actionTitle,
+            int? expectedMetaType = 0,
+            bool requireMetaTypeMatch = false,
+            ChartWindowType windowType = ChartWindowType.Standard)
         {
             if (_mdiWindowManager == null)
             {
@@ -217,10 +227,10 @@ namespace MGK_Analyzer
                 MemoryOptimizedDataSet dataSet;
                 using (var csvTimer = PerformanceLogger.Instance.StartTimer("CSV 파일 로딩", "Data_Import"))
                 {
-                    dataSet = await _csvLoader.LoadCsvDataAsync(filePath, progress);
+                    dataSet = await _csvLoader.LoadCsvDataAsync(filePath, progress, expectedMetaType, requireMetaTypeMatch);
                 }
 
-                CreateChartWindowFromDataSet(dataSet);
+                CreateChartWindowFromDataSet(dataSet, windowType);
 
                 var loadMessage = fileSizeMB > 5
                     ? $"'{dataSet.FileName}' 파일이 성공적으로 로드되었습니다. (크기: {fileSizeMB:F1}MB, 데이터: {dataSet.TotalSamples:N0}개, 시리즈: {dataSet.SeriesData.Count}개) - 다운샘플링 적용됨"
@@ -239,12 +249,21 @@ namespace MGK_Analyzer
             }
         }
 
-        private void CreateChartWindowFromDataSet(MemoryOptimizedDataSet dataSet)
+        private void CreateChartWindowFromDataSet(MemoryOptimizedDataSet dataSet, ChartWindowType windowType = ChartWindowType.Standard)
         {
             using (var chartTimer = PerformanceLogger.Instance.StartTimer("차트 윈도우 생성", "Data_Import"))
             {
-                var mdi = _mdiWindowManager!.CreateChartWindow(dataSet.FileName, dataSet);
-                mdi.WindowClosed += (s, args) => UpdateWindowCount();
+                if (windowType == ChartWindowType.NtCurve)
+                {
+                    var mdi = _mdiWindowManager!.CreateNTCurveChartWindow(dataSet.FileName, dataSet);
+                    mdi.WindowClosed += (s, args) => UpdateWindowCount();
+                }
+                else
+                {
+                    var mdi = _mdiWindowManager!.CreateChartWindow(dataSet.FileName, dataSet);
+                    mdi.WindowClosed += (s, args) => UpdateWindowCount();
+                }
+
                 _chartWindowCount = _mdiWindowManager.WindowCount;
                 PerformanceLogger.Instance.LogInfo($"MDI 차트 윈도우 생성 완료: {dataSet.FileName}", "Data_Import");
             }
@@ -258,8 +277,22 @@ namespace MGK_Analyzer
 
         private void AnalyzeData_Click(object sender, RoutedEventArgs e)
         {
-            UpdateStatusBar("데이터를 분석하고 있습니다...");
-            MessageBox.Show("데이터 분석 기능이 실행되었습니다.", "데이터", MessageBoxButton.OK, MessageBoxImage.Information);
+			try
+			{
+				UpdateStatusBar("분석 입력 폼을 여는 중...");
+				var window = new AnalysisInputWindow
+				{
+					Owner = this
+				};
+				window.Show();
+				UpdateStatusBar("분석 입력 폼이 열렸습니다.");
+			}
+			catch (Exception ex)
+			{
+				PerformanceLogger.Instance.LogError($"분석 입력 폼 열기 실패: {ex.Message}", "Application");
+				MessageBox.Show($"분석 입력 폼을 열 수 없습니다:\n\n{ex.Message}", "오류", MessageBoxButton.OK, MessageBoxImage.Error);
+				UpdateStatusBar("분석 입력 폼 열기 실패");
+			}
         }
 
         private void FilterData_Click(object sender, RoutedEventArgs e)
@@ -456,7 +489,7 @@ namespace MGK_Analyzer
             return dataSet;
         }
 
-        private void LoadTest_Click(object sender, RoutedEventArgs e)
+        private async void LoadTest_Click(object sender, RoutedEventArgs e)
         {
             try
             {
@@ -474,12 +507,9 @@ namespace MGK_Analyzer
 
                 if (openFileDialog.ShowDialog() == true)
                 {
-                    // 파일 선택 완료 - 여기까지 진행
-                    UpdateStatusBar($"부하시험 데이터 파일이 선택되었습니다: {System.IO.Path.GetFileName(openFileDialog.FileName)}");
+                    UpdateStatusBar("부하시험 데이터를 로딩하고 있습니다...");
                     PerformanceLogger.Instance.LogInfo($"부하시험 데이터 파일 선택: {openFileDialog.FileName}", "TestMode");
-                    
-                    // 다음 단계는 별도 구현 예정
-                    return;
+                    await LoadCsvAndDisplayChartAsync(openFileDialog.FileName, "부하시험 데이터", expectedMetaType: 1, requireMetaTypeMatch: true);
                 }
                 else
                 {
@@ -494,7 +524,7 @@ namespace MGK_Analyzer
             }
         }
         
-        private void NoLoadTest_Click(object sender, RoutedEventArgs e)
+        private async void NoLoadTest_Click(object sender, RoutedEventArgs e)
         {
             try
             {
@@ -512,12 +542,9 @@ namespace MGK_Analyzer
 
                 if (openFileDialog.ShowDialog() == true)
                 {
-                    // 파일 선택 완료 - 여기까지 진행
-                    UpdateStatusBar($"무부하시험 데이터 파일이 선택되었습니다: {System.IO.Path.GetFileName(openFileDialog.FileName)}");
+                    UpdateStatusBar("무부하시험 데이터를 로딩하고 있습니다...");
                     PerformanceLogger.Instance.LogInfo($"무부하시험 데이터 파일 선택: {openFileDialog.FileName}", "TestMode");
-                    
-                    // 다음 단계는 별도 구현 예정
-                    return;
+                    await LoadCsvAndDisplayChartAsync(openFileDialog.FileName, "무부하시험 데이터", expectedMetaType: 2, requireMetaTypeMatch: true);
                 }
                 else
                 {
@@ -603,7 +630,7 @@ namespace MGK_Analyzer
             return dataSet;
         }
 
-        private void NtCurveTest_Click(object sender, RoutedEventArgs e)
+        private async void NtCurveTest_Click(object sender, RoutedEventArgs e)
         {
             try
             {
@@ -612,26 +639,35 @@ namespace MGK_Analyzer
                     UpdateStatusBar("MDI 초기화가 완료되지 않았습니다.");
                     return;
                 }
-                UpdateStatusBar("NT-Curve 시험 차트를 생성하고 있습니다...");
-                PerformanceLogger.Instance.LogInfo("NT-Curve 시험 모드 선택", "TestMode");
-                
-                // NT-Curve 샘플 데이터 생성
-                var sampleDataSet = CreateNtCurveTestSampleData();
-                
-                // 차트 윈도우 생성
-                var mdi = _mdiWindowManager.CreateChartWindow("NT-Curve 시험 - " + DateTime.Now.ToString("HH:mm:ss"), sampleDataSet);
-                mdi.WindowClosed += (s, args) => UpdateWindowCount();
-                
-                UpdateStatusBar($"NT-Curve 시험 차트가 생성되었습니다. (샘플 데이터: {sampleDataSet.TotalSamples}개)");
-                PerformanceLogger.Instance.LogInfo("NT-Curve 시험 차트 생성 완료", "TestMode");
-                UpdateWindowCount();
-                
-                WelcomeMessage.Visibility = Visibility.Collapsed;
+
+                var openFileDialog = new OpenFileDialog
+                {
+                    Title = "NT-Curve CSV 파일 선택",
+                    Filter = "CSV 파일 (*.csv)|*.csv|모든 파일 (*.*)|*.*",
+                    CheckFileExists = true,
+                    CheckPathExists = true
+                };
+
+                if (openFileDialog.ShowDialog() == true)
+                {
+                    UpdateStatusBar("NT-Curve 데이터를 로딩하고 있습니다...");
+                    PerformanceLogger.Instance.LogInfo("NT-Curve 파일 선택", "TestMode");
+                    await LoadCsvAndDisplayChartAsync(
+                        openFileDialog.FileName,
+                        "NT-Curve 데이터",
+                        expectedMetaType: 4,
+                        requireMetaTypeMatch: true,
+                        windowType: ChartWindowType.NtCurve);
+                }
+                else
+                {
+                    UpdateStatusBar("NT-Curve CSV 파일 선택이 취소되었습니다.");
+                }
             }
             catch (Exception ex)
             {
                 PerformanceLogger.Instance.LogError($"NT-Curve 시험 모드 오류: {ex.Message}", "TestMode");
-                MessageBox.Show($"NT-Curve 시험 차트 생성 중 오류 발생:\n{ex.Message}", "오류", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show($"NT-Curve 데이터 처리 중 오류 발생:\n{ex.Message}", "오류", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 
@@ -673,7 +709,7 @@ namespace MGK_Analyzer
                 {
                     foreach (var child in MdiCanvas.Children)
                     {
-                        if (child is MdiChartWindow)
+                        if (child is MdiChartWindow || child is MdiNTCurveChartWindow)
                             _chartWindowCount++;
                     }
                 }

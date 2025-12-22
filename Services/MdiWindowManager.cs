@@ -13,6 +13,7 @@ namespace MGK_Analyzer.Services
     {
         private Canvas _mdiCanvas;
         private List<MdiChartWindow> _windows = new List<MdiChartWindow>();
+        private List<MdiNTCurveChartWindow> _ntCurveWindows = new List<MdiNTCurveChartWindow>();
         private List<MdiContour2DWindow> _contour2DWindows = new List<MdiContour2DWindow>();
         private List<MdiSurface3DWindow> _surface3DWindows = new List<MdiSurface3DWindow>();
         private int _windowZIndex = 0;
@@ -57,6 +58,45 @@ namespace MGK_Analyzer.Services
             
             _windowOffset = (_windowOffset + 1) % 10;
             
+            return window;
+        }
+
+        public MdiNTCurveChartWindow CreateNTCurveChartWindow(string fileName, MemoryOptimizedDataSet dataSet, IEnumerable<string>? initialSeries = null)
+        {
+            var window = new MdiNTCurveChartWindow
+            {
+                Width = 800,
+                Height = 600,
+                WindowTitle = $"NT-Curve - {fileName}"
+            };
+
+            if (initialSeries != null)
+            {
+                window.SetInitialSeriesSelection(initialSeries);
+            }
+
+            window.DataSet = dataSet;
+
+            var left = _windowOffset * 30;
+            var top = _windowOffset * 30;
+
+            if (left + window.Width > _mdiCanvas.ActualWidth - 50)
+                left = 20;
+            if (top + window.Height > _mdiCanvas.ActualHeight - 50)
+                top = 20;
+
+            Canvas.SetLeft(window, left);
+            Canvas.SetTop(window, top);
+            MdiZOrderService.BringToFront(window);
+
+            _mdiCanvas.Children.Add(window);
+            _ntCurveWindows.Add(window);
+
+            window.WindowClosed += NtCurveWindow_Closed;
+            window.WindowActivated += NtCurveWindow_Activated;
+
+            _windowOffset = (_windowOffset + 1) % 10;
+
             return window;
         }
 
@@ -187,6 +227,14 @@ namespace MGK_Analyzer.Services
                 index++;
             }
 
+            for (int i = 0; i < _ntCurveWindows.Count; i++)
+            {
+                Canvas.SetLeft(_ntCurveWindows[i], index * 30);
+                Canvas.SetTop(_ntCurveWindows[i], index * 30);
+                Canvas.SetZIndex(_ntCurveWindows[i], index);
+                index++;
+            }
+
             for (int i = 0; i < _contour2DWindows.Count; i++)
             {
                 Canvas.SetLeft(_contour2DWindows[i], index * 30);
@@ -208,6 +256,7 @@ namespace MGK_Analyzer.Services
         {
             var allWindows = new List<FrameworkElement>();
             allWindows.AddRange(_windows);
+            allWindows.AddRange(_ntCurveWindows);
             allWindows.AddRange(_contour2DWindows);
             allWindows.AddRange(_surface3DWindows);
             
@@ -235,6 +284,8 @@ namespace MGK_Analyzer.Services
         {
             foreach (var window in _windows)
                 window.Height = 30;
+            foreach (var window in _ntCurveWindows)
+                window.Height = 30;
             foreach (var window in _contour2DWindows)
                 window.Height = 30;
             foreach (var window in _surface3DWindows)
@@ -247,6 +298,10 @@ namespace MGK_Analyzer.Services
             foreach (var window in windowsCopy)
                 window.Close_Click(null, null);
 
+            var ntWindowsCopy = _ntCurveWindows.ToList();
+            foreach (var window in ntWindowsCopy)
+                window.Close_Click(null, null);
+
             var contourCopy = _contour2DWindows.ToList();
             foreach (var window in contourCopy)
                 window.Close_Click(null, null);
@@ -257,6 +312,22 @@ namespace MGK_Analyzer.Services
             _surface3DWindows.Clear();
         }
 
-        public int WindowCount => _windows.Count + _contour2DWindows.Count + _surface3DWindows.Count;
+        public int WindowCount => _windows.Count + _ntCurveWindows.Count + _contour2DWindows.Count + _surface3DWindows.Count;
+
+        private void NtCurveWindow_Closed(object sender, EventArgs e)
+        {
+            var window = (MdiNTCurveChartWindow)sender;
+            _mdiCanvas.Children.Remove(window);
+            _ntCurveWindows.Remove(window);
+
+            window.WindowClosed -= NtCurveWindow_Closed;
+            window.WindowActivated -= NtCurveWindow_Activated;
+        }
+
+        private void NtCurveWindow_Activated(object sender, EventArgs e)
+        {
+            var window = (MdiNTCurveChartWindow)sender;
+            MdiZOrderService.BringToFront(window);
+        }
     }
 }

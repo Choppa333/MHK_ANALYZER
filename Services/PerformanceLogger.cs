@@ -1,4 +1,6 @@
 using System;
+using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Diagnostics;
@@ -10,9 +12,14 @@ namespace MGK_Analyzer.Services
     {
         private static PerformanceLogger _instance;
         private static readonly object _lock = new object();
+		private static readonly HashSet<string> _csvLogCategories = new(StringComparer.OrdinalIgnoreCase)
+		{
+			"CSV_Loading"
+		};
         
         private ObservableCollection<LogEntry> _logEntries;
         private Stopwatch _globalStopwatch;
+		private bool _restrictLogsToCsvCategories = true;
 
         public static PerformanceLogger Instance
         {
@@ -37,6 +44,15 @@ namespace MGK_Analyzer.Services
         }
 
         public ObservableCollection<LogEntry> LogEntries => _logEntries;
+
+		/// <summary>
+		/// When true, only categories explicitly whitelisted for CSV parsing will be logged.
+		/// </summary>
+		public bool RestrictLogsToCsvCategories
+		{
+			get => _restrictLogsToCsvCategories;
+			set => _restrictLogsToCsvCategories = value;
+		}
 
         public void LogInfo(string message, string category = "General")
         {
@@ -63,8 +79,13 @@ namespace MGK_Analyzer.Services
             return new PerformanceTimer(this, operation, category);
         }
 
-        private void Log(LogLevel level, string message, string category)
+		private void Log(LogLevel level, string message, string category)
         {
+			if (!ShouldLogCategory(category))
+			{
+				return;
+			}
+
             var entry = new LogEntry
             {
                 Timestamp = DateTime.Now,
@@ -97,6 +118,26 @@ namespace MGK_Analyzer.Services
         {
             _logEntries.Clear();
         }
+
+		private bool ShouldLogCategory(string category)
+		{
+			if (!_restrictLogsToCsvCategories)
+			{
+				return true;
+			}
+
+			if (string.IsNullOrWhiteSpace(category))
+			{
+				return false;
+			}
+
+			if (_csvLogCategories.Contains(category))
+			{
+				return true;
+			}
+
+			return category.StartsWith("CSV", StringComparison.OrdinalIgnoreCase);
+		}
 
         public event PropertyChangedEventHandler PropertyChanged;
         protected virtual void OnPropertyChanged([CallerMemberName] string propertyName = null)

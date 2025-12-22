@@ -2,18 +2,26 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
+using System.Data;
 using System.Globalization;
 using System.Linq;
 using System.Runtime.CompilerServices;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
+using System.Windows.Controls.Primitives;
+using Microsoft.Win32;
+using System.IO;
 using MGK_Analyzer.Models;
 using MGK_Analyzer.Services;
+using Syncfusion.SfSkinManager;
 using Syncfusion.UI.Xaml.Charts;
+using OfficeOpenXml;
+using OfficeOpenXml.Table;
 
 namespace MGK_Analyzer.Controls
 {
@@ -22,12 +30,27 @@ namespace MGK_Analyzer.Controls
             private bool _isDragging = false;
             private bool _isResizing = false;
             private Point _lastPosition;
-            private static int _globalZIndex = 1; // deprecated local counter; retained to avoid widespread edits
-            private MemoryOptimizedDataSet? _dataSet;
+        private static int _globalZIndex = 1; // deprecated local counter; retained to avoid widespread edits
+        private MemoryOptimizedDataSet? _dataSet;
+        private DataView? _dataTableView;
+        private DataTable? _dataTableBackingStore;
+        private string _dataTableStatus = "No data loaded.";
+        private string _baseDataTableStatus = "No data loaded.";
+        private CancellationTokenSource? _dataTableBuildCancellation;
+        private const int DataTableRowLimit = 20000;
+        private const int DataTablePageSize = 100;
+        private int _currentPageIndex;
+        private int _totalPageCount;
         private bool _isManagementPanelExpanded = true;
         private bool _isManagementPanelPinned = false;
         private bool _isLeftPanelExpanded = true;
         private bool _isLeftPanelPinned = false;
+		private const double LeftPanelCollapsedWidth = 12;
+		private const double LeftPanelTabColumnWidth = 12;
+        private const double LeftPanelSplitterVisibleWidth = 5;
+        private double _savedLeftPanelWidth = 320;
+        private ColumnDefinition? _leftPanelColumn;
+        private ColumnDefinition? _leftPanelSplitterColumn;
 		private readonly List<ChartCursorHandle> _cursorHandles = new();
 		private const int MaxActiveSeriesCount = 10;
 		private const int MaxSnapshotSeriesValues = MaxActiveSeriesCount;
@@ -45,6 +68,7 @@ namespace MGK_Analyzer.Controls
             };
 		private readonly Dictionary<string, NumericalAxis> _unitAxes = new(StringComparer.OrdinalIgnoreCase);
 		private NumericalAxis? _defaultSecondaryAxis;
+		private Canvas? _cursorOverlay;
 		private (double min, double max)? _cachedDataValueRange;
         private HashSet<string> _initialSeriesSelection = new(StringComparer.OrdinalIgnoreCase);
         
@@ -74,6 +98,31 @@ namespace MGK_Analyzer.Controls
             set { SetValue(WindowTitleProperty, value); OnPropertyChanged(); }
         }
 
+        public DataView? DataTableView
+        {
+            get => _dataTableView;
+            private set { _dataTableView = value; OnPropertyChanged(); }
+        }
+
+        public string DataTableStatus
+        {
+            get => _dataTableStatus;
+            private set { _dataTableStatus = value; OnPropertyChanged(); }
+        }
+
+        public int TotalPageCount
+        {
+            get => _totalPageCount;
+            private set
+            {
+                if (_totalPageCount != value)
+                {
+                    _totalPageCount = value;
+                    OnPropertyChanged();
+                }
+            }
+        }
+
         // Management panel event handlers referenced from XAML
         private void ManagementPanel_MouseLeave(object sender, System.Windows.Input.MouseEventArgs e)
         {
@@ -89,9 +138,7 @@ namespace MGK_Analyzer.Controls
         {
             if (!_isLeftPanelPinned)
             {
-                LeftPanel.Visibility = Visibility.Collapsed;
-                LeftPanelTab.Visibility = Visibility.Visible;
-                _isLeftPanelExpanded = false;
+                HideLeftPanel();
             }
         }
 
@@ -124,9 +171,7 @@ namespace MGK_Analyzer.Controls
 
         private void LeftPanelTab_MouseEnter(object sender, MouseEventArgs e)
         {
-            LeftPanel.Visibility = Visibility.Visible;
-            LeftPanelTab.Visibility = Visibility.Collapsed;
-            _isLeftPanelExpanded = true;
+            ShowLeftPanel();
         }
 
         private void ManagementPanelTab_MouseDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
@@ -150,16 +195,88 @@ namespace MGK_Analyzer.Controls
         {
             if (_isLeftPanelExpanded)
             {
-                LeftPanel.Visibility = Visibility.Collapsed;
-                LeftPanelTab.Visibility = Visibility.Visible;
-                _isLeftPanelExpanded = false;
+                HideLeftPanel();
             }
             else
             {
-                LeftPanel.Visibility = Visibility.Visible;
-                LeftPanelTab.Visibility = Visibility.Collapsed;
-                _isLeftPanelExpanded = true;
+                ShowLeftPanel();
             }
+        }
+
+        private void HideLeftPanel()
+        {
+            if (!_isLeftPanelExpanded)
+            {
+                return;
+            }
+
+            StoreCurrentLeftPanelWidth();
+            LeftPanel.Visibility = Visibility.Collapsed;
+            LeftPanelTab.Visibility = Visibility.Visible;
+
+			var collapsedWidth = LeftPanelTab.ActualWidth > 0
+				? LeftPanelTab.ActualWidth
+				: LeftPanelCollapsedWidth;
+			collapsedWidth = Math.Min(collapsedWidth, LeftPanelTabColumnWidth);
+            if (_leftPanelColumn != null)
+            {
+                _leftPanelColumn.Width = new GridLength(collapsedWidth);
+            }
+
+            if (_leftPanelSplitterColumn != null)
+            {
+                _leftPanelSplitterColumn.Width = new GridLength(0);
+            }
+
+            _isLeftPanelExpanded = false;
+        }
+
+        private void ShowLeftPanel()
+        {
+            if (_isLeftPanelExpanded)
+            {
+                return;
+            }
+
+            LeftPanel.Visibility = Visibility.Visible;
+            LeftPanelTab.Visibility = Visibility.Collapsed;
+
+            if (_leftPanelColumn != null)
+            {
+                var targetWidth = Math.Max(_savedLeftPanelWidth, _leftPanelColumn.MinWidth);
+                _leftPanelColumn.Width = new GridLength(targetWidth);
+            }
+
+            if (_leftPanelSplitterColumn != null)
+            {
+                _leftPanelSplitterColumn.Width = new GridLength(LeftPanelSplitterVisibleWidth);
+            }
+
+            _isLeftPanelExpanded = true;
+        }
+
+        private void StoreCurrentLeftPanelWidth()
+        {
+            if (_leftPanelColumn == null)
+            {
+                return;
+            }
+
+            var currentWidth = _leftPanelColumn.ActualWidth;
+            if (double.IsNaN(currentWidth) || currentWidth <= 0)
+            {
+                currentWidth = _leftPanelColumn.Width.Value;
+            }
+
+            if (currentWidth > 0)
+            {
+                _savedLeftPanelWidth = Math.Max(currentWidth, _leftPanelColumn.MinWidth);
+            }
+        }
+
+        private void LeftPanelSplitter_DragCompleted(object sender, DragCompletedEventArgs e)
+        {
+            StoreCurrentLeftPanelWidth();
         }
 
         public MemoryOptimizedDataSet? DataSet
@@ -176,6 +293,7 @@ namespace MGK_Analyzer.Controls
                 
                 PerformanceLogger.Instance.LogInfo($"차트 데이터 설정 - 파일: {value?.FileName}, 시리즈: {value?.SeriesData?.Count}", "Chart_Display");
                 InitializeSeriesList();
+                RebuildDataTableViewAsync();
             }
         }
 
@@ -196,6 +314,10 @@ namespace MGK_Analyzer.Controls
         {
             InitializeComponent();
             DataContext = this;
+            ApplyInheritedTheme();
+			_cursorOverlay = FindName("CursorOverlay") as Canvas;
+            _leftPanelColumn = (ColumnDefinition?)FindName("LeftPanelColumn");
+            _leftPanelSplitterColumn = (ColumnDefinition?)FindName("LeftPanelSplitterColumn");
             this.PreviewMouseDown += (_, __) => MGK_Analyzer.Services.MdiZOrderService.BringToFront(this);
             
             _isManagementPanelExpanded = true;
@@ -204,7 +326,7 @@ namespace MGK_Analyzer.Controls
             _isLeftPanelPinned = false;
 
             // XAML에 정의된 기본 축을 사용하거나, 여기서 코드로 설정
-            ChartControl.PrimaryAxis = new DateTimeAxis { Header = "Time", LabelFormat = "HH:mm:ss.fff" };
+			ChartControl.PrimaryAxis = new NumericalAxis { Header = "Elapsed Time (s)", LabelFormat = "0.###" };
             if (ChartControl.SecondaryAxis is NumericalAxis numericAxis)
             {
                 _defaultSecondaryAxis = numericAxis;
@@ -217,7 +339,56 @@ namespace MGK_Analyzer.Controls
 
             ChartControl.SizeChanged += (_, __) => RefreshCursorHandles();
             ChartControl.LayoutUpdated += (_, __) => RefreshCursorHandles();
-            ChartControl.Loaded += (_, __) => RefreshCursorHandles();
+            ChartControl.Loaded += (_, __) =>
+            {
+				_cursorOverlay ??= FindName("CursorOverlay") as Canvas;
+                RefreshCursorHandles();
+            };
+			if (_cursorOverlay != null)
+			{
+				_cursorOverlay.SizeChanged += (_, __) => RefreshCursorHandles();
+				_cursorOverlay.LayoutUpdated += (_, __) => RefreshCursorHandles();
+			}
+            Loaded += (_, __) => InitializeLeftPanelSizing();
+        }
+
+        private void InitializeLeftPanelSizing()
+        {
+            if (_leftPanelColumn != null)
+            {
+                var configuredWidth = _leftPanelColumn.Width.Value;
+                if (configuredWidth > 0)
+                {
+                    _savedLeftPanelWidth = Math.Max(configuredWidth, _leftPanelColumn.MinWidth);
+                }
+            }
+
+            if (_leftPanelSplitterColumn != null)
+            {
+                _leftPanelSplitterColumn.Width = new GridLength(LeftPanelSplitterVisibleWidth);
+            }
+        }
+
+        private void ApplyInheritedTheme()
+        {
+            try
+            {
+                var mainWindow = Application.Current?.MainWindow;
+                if (mainWindow == null)
+                {
+                    return;
+                }
+
+                var parentTheme = SfSkinManager.GetTheme(mainWindow);
+                if (parentTheme != null)
+                {
+                    SfSkinManager.SetTheme(this, new Theme(parentTheme.ThemeName));
+                }
+            }
+            catch
+            {
+                // Theme application is best-effort; ignore failures to avoid blocking window creation.
+            }
         }
 
         #region 관리 패널 자동 숨김/고정 기능
@@ -309,7 +480,7 @@ namespace MGK_Analyzer.Controls
 			var seriesType = series.DataType == typeof(bool) ? typeof(StepLineSeries) : typeof(FastLineBitmapSeries);
 			var targetPointBudget = GetTargetPointBudget();
 			var sampleStep = Math.Max(1, DataSet.TotalSamples / Math.Max(1, targetPointBudget));
-            List<ChartDataPoint> dataPoints;
+			List<RelativeChartDataPoint> dataPoints;
 
 			if (series.DataType == typeof(bool))
 			{
@@ -335,7 +506,7 @@ namespace MGK_Analyzer.Controls
             dynamic dynSeries = chartSeries;
             try
             {
-                dynSeries.XBindingPath = "Time";
+				dynSeries.XBindingPath = "RelativeSeconds";
             }
             catch { }
             try
@@ -384,17 +555,17 @@ namespace MGK_Analyzer.Controls
 			}
 		}
 
-		private List<ChartDataPoint> CreateBoolDataPoints(SeriesData series, int step, int maxPoints)
+		private List<RelativeChartDataPoint> CreateBoolDataPoints(SeriesData series, int step, int maxPoints)
         {
             using var timer = PerformanceLogger.Instance.StartTimer($"Bool 데이터 포인트 생성: {series.Name}", "Chart_Display");
             
-            var dataPoints = new List<ChartDataPoint>();
+			var dataPoints = new List<RelativeChartDataPoint>();
 			var pointCount = 0;
             
 			for (int i = 0; i < DataSet.TotalSamples && pointCount < maxPoints; i += step)
             {
                 bool value = GetBoolValue(series.BitValues, i);
-                dataPoints.Add(new ChartDataPoint(DataSet.GetTimeAt(i), value ? 1.0 : 0.0)
+				dataPoints.Add(new RelativeChartDataPoint(DataSet.GetRelativeTimeAt(i), value ? 1.0 : 0.0)
                 {
                     SeriesName = series.Name
                 });
@@ -405,10 +576,10 @@ namespace MGK_Analyzer.Controls
             return dataPoints;
         }
 
-		private List<ChartDataPoint> CreateDoubleDataPoints(SeriesData series, int step, int maxPointsToCreate)
+		private List<RelativeChartDataPoint> CreateDoubleDataPoints(SeriesData series, int step, int maxPointsToCreate)
 		{
 			using var timer = PerformanceLogger.Instance.StartTimer($"Double 데이터 포인트 생성: {series.Name}", "Chart_Display");
-			var dataPoints = new List<ChartDataPoint>();
+			var dataPoints = new List<RelativeChartDataPoint>();
 			var pointCount = 0;
 			if (series.Values == null || series.Values.Length == 0)
 			{
@@ -424,8 +595,8 @@ namespace MGK_Analyzer.Controls
 					continue;
 				}
 
-				var time = DataSet.GetTimeAt(i);
-				dataPoints.Add(new ChartDataPoint(time, value)
+				var t = DataSet.GetRelativeTimeAt(i);
+				dataPoints.Add(new RelativeChartDataPoint(t, value)
 				{
 					SeriesName = series.Name
 				});
@@ -434,6 +605,19 @@ namespace MGK_Analyzer.Controls
 
 			PerformanceLogger.Instance.LogInfo($"Double 데이터 포인트 생성 완료: {pointCount:N0}개", "Chart_Display");
 			return dataPoints;
+		}
+
+		private sealed class RelativeChartDataPoint
+		{
+			public RelativeChartDataPoint(double relativeSeconds, double value)
+			{
+				RelativeSeconds = relativeSeconds;
+				Value = value;
+			}
+
+			public double RelativeSeconds { get; }
+			public double Value { get; }
+			public string? SeriesName { get; set; }
 		}
 
         private void RemoveSeriesFromChart(SeriesData series)
@@ -496,6 +680,249 @@ namespace MGK_Analyzer.Controls
 			}
 
 			_cachedDataValueRange = (min, max);
+		}
+
+		private async void RebuildDataTableViewAsync()
+		{
+			_dataTableBuildCancellation?.Cancel();
+			_dataTableBuildCancellation?.Dispose();
+
+			if (DataSet == null || DataSet.SeriesData == null || DataSet.SeriesData.Count == 0 || DataSet.TotalSamples <= 0)
+			{
+                _dataTableBackingStore = null;
+                DataTableView = null;
+                DataTableStatus = "No data loaded.";
+				return;
+			}
+
+			var cts = new CancellationTokenSource();
+			_dataTableBuildCancellation = cts;
+            DataTableStatus = "Building data table...";
+
+			try
+			{
+				var result = await Task.Run(() => BuildDataTableInternal(DataSet!, cts.Token), cts.Token);
+				if (cts.IsCancellationRequested)
+				{
+					return;
+				}
+
+				if (result.table == null)
+				{
+					_dataTableBackingStore = null;
+					DataTableView = null;
+                    DataTableStatus = string.IsNullOrWhiteSpace(result.status) ? "No data available." : result.status;
+					_baseDataTableStatus = DataTableStatus;
+					ResetPagingControls();
+					return;
+				}
+
+				_dataTableBackingStore = result.table;
+				_baseDataTableStatus = result.status;
+				InitializePaging();
+			}
+			catch (OperationCanceledException)
+			{
+				// no-op
+			}
+			catch (Exception ex)
+			{
+                PerformanceLogger.Instance.LogError($"Data table generation failed: {ex.Message}", "Chart_Display");
+				_dataTableBackingStore = null;
+				DataTableView = null;
+                DataTableStatus = "Unable to build data table.";
+			}
+			finally
+			{
+				if (_dataTableBuildCancellation == cts)
+				{
+					_dataTableBuildCancellation.Dispose();
+					_dataTableBuildCancellation = null;
+				}
+			}
+		}
+
+		private (DataTable? table, string status) BuildDataTableInternal(MemoryOptimizedDataSet dataSet, CancellationToken token)
+		{
+			try
+			{
+				var dataSeries = dataSet.SeriesData.Values
+					.Where(series => !IsTimestampSeries(series?.Name))
+					.ToList();
+
+				if (dataSeries.Count == 0)
+				{
+					return (null, "No measurement columns available.");
+				}
+
+				var table = new DataTable("MeasurementTable");
+				table.Columns.Add("Elapsed Time (s)", typeof(double));
+
+				foreach (var series in dataSeries)
+				{
+					var columnType = series.DataType == typeof(bool) ? typeof(bool) : typeof(double);
+					var columnName = string.IsNullOrWhiteSpace(series.Name)
+						? $"Column {table.Columns.Count}"
+						: series.Name;
+					table.Columns.Add(columnName, columnType);
+				}
+
+				var totalRows = dataSet.TotalSamples;
+				var rowLimit = Math.Min(totalRows, DataTableRowLimit);
+
+				for (int rowIndex = 0; rowIndex < rowLimit; rowIndex++)
+				{
+					token.ThrowIfCancellationRequested();
+
+					var row = table.NewRow();
+					row[0] = Math.Round(dataSet.GetRelativeTimeAt(rowIndex), 4);
+
+					for (int columnIndex = 0; columnIndex < dataSeries.Count; columnIndex++)
+					{
+						row[columnIndex + 1] = GetSeriesCellValue(dataSeries[columnIndex], rowIndex);
+					}
+
+					table.Rows.Add(row);
+				}
+
+				var status = totalRows > rowLimit
+					? $"Showing {rowLimit:N0} of {totalRows:N0} rows (relative time in seconds)"
+					: $"Showing all {totalRows:N0} rows (relative time in seconds)";
+
+				return (table, status);
+			}
+			catch (OperationCanceledException)
+			{
+				throw;
+			}
+			catch (Exception ex)
+			{
+				return (null, $"Failed to build data table: {ex.Message}");
+			}
+		}
+
+		private void InitializePaging()
+		{
+			if (_dataTableBackingStore == null || _dataTableBackingStore.Rows.Count == 0)
+			{
+				TotalPageCount = 0;
+				DataTableView = null;
+				UpdatePagingStatus(0, 0);
+				ResetPagingControls();
+				return;
+			}
+
+			TotalPageCount = (int)Math.Ceiling(_dataTableBackingStore.Rows.Count / (double)DataTablePageSize);
+			_currentPageIndex = 0;
+			LoadPage(_currentPageIndex);
+		}
+
+		private void LoadPage(int pageIndex)
+		{
+			if (_dataTableBackingStore == null || _dataTableBackingStore.Rows.Count == 0)
+			{
+				DataTableView = null;
+				UpdatePagingStatus(0, 0);
+				ResetPagingControls();
+				return;
+			}
+
+			if (TotalPageCount == 0)
+			{
+				TotalPageCount = 1;
+			}
+
+			pageIndex = Math.Clamp(pageIndex, 0, Math.Max(0, TotalPageCount - 1));
+			_currentPageIndex = pageIndex;
+
+			var pageTable = _dataTableBackingStore.Clone();
+			var startRow = pageIndex * DataTablePageSize;
+			var endRow = Math.Min(startRow + DataTablePageSize, _dataTableBackingStore.Rows.Count);
+			for (int i = startRow; i < endRow; i++)
+			{
+				pageTable.ImportRow(_dataTableBackingStore.Rows[i]);
+			}
+
+			DataTableView = pageTable.DefaultView;
+			UpdatePagingStatus(startRow, endRow);
+			UpdatePageNumberTextBox();
+		}
+
+		private void UpdatePagingStatus(int startRow, int endRow)
+		{
+			if (_dataTableBackingStore == null || _dataTableBackingStore.Rows.Count == 0)
+			{
+				DataTableStatus = _baseDataTableStatus;
+				return;
+			}
+
+			var totalRows = _dataTableBackingStore.Rows.Count;
+			if (endRow == 0)
+			{
+				endRow = Math.Min(DataTablePageSize, totalRows);
+			}
+			var pageInfo = TotalPageCount > 0
+				? $"Page {_currentPageIndex + 1} / {TotalPageCount}"
+				: "Page 0 / 0";
+			DataTableStatus = $"{_baseDataTableStatus} | Rows {startRow + 1:N0}-{endRow:N0} of {totalRows:N0} | {pageInfo}";
+		}
+
+		private void ResetPagingControls()
+		{
+			_currentPageIndex = 0;
+			TotalPageCount = 0;
+			UpdatePageNumberTextBox();
+		}
+
+		private void UpdatePageNumberTextBox()
+		{
+			if (PageNumberTextBox == null)
+			{
+				return;
+			}
+
+			if (TotalPageCount == 0)
+			{
+				PageNumberTextBox.Text = string.Empty;
+				PageNumberTextBox.IsEnabled = false;
+			}
+			else
+			{
+				PageNumberTextBox.IsEnabled = true;
+				PageNumberTextBox.Text = (_currentPageIndex + 1).ToString(CultureInfo.InvariantCulture);
+			}
+		}
+
+		private static bool IsTimestampSeries(string? name)
+		{
+			if (string.IsNullOrWhiteSpace(name))
+			{
+				return false;
+			}
+
+			return name.Equals("Timestamp", StringComparison.OrdinalIgnoreCase) ||
+			       name.Equals("DateTime", StringComparison.OrdinalIgnoreCase);
+		}
+
+		private object GetSeriesCellValue(SeriesData series, int rowIndex)
+		{
+			if (series.DataType == typeof(bool))
+			{
+				return GetBoolValue(series.BitValues, rowIndex);
+			}
+
+			if (series.Values == null || rowIndex < 0 || rowIndex >= series.Values.Length)
+			{
+				return double.NaN;
+			}
+
+			var value = series.Values[rowIndex];
+			if (float.IsNaN(value) || float.IsInfinity(value))
+			{
+				return double.NaN;
+			}
+
+			return Math.Round(value, 6);
 		}
 
         private (double min, double max) GetVisibleValueRange()
@@ -626,8 +1053,8 @@ namespace MGK_Analyzer.Controls
                 return;
             }
 
-            var cursorIndex = GetNextCursorIndex();
-            var cursorTime = DataSet.GetTimeAt(cursorIndex);
+			var cursorIndex = GetNextCursorIndex();
+			var cursorSeconds = DataSet.GetRelativeTimeAt(cursorIndex);
             var (minValue, maxValue) = GetVisibleValueRange();
             if (Math.Abs(maxValue - minValue) < 0.001)
             {
@@ -638,16 +1065,20 @@ namespace MGK_Analyzer.Controls
 
             var annotation = new VerticalLineAnnotation
             {
-                X1 = cursorTime,
-                X2 = cursorTime,
+				X1 = cursorSeconds,
+				X2 = cursorSeconds,
                 Y1 = minValue,
                 Y2 = maxValue,
                 Stroke = cursorBrush,
-				StrokeThickness = 2.5,
+				StrokeThickness = 3.5,
 				CanDrag = true,
 				CanResize = false,
 				DraggingMode = AxisMode.Horizontal
             };
+
+			// Keep annotation barely visible so it remains hit-testable for drag.
+			// (A fully transparent stroke prevents interaction in this Syncfusion build.)
+			annotation.Opacity = 0.01;
 
             ChartControl.Annotations?.Add(annotation);
 
@@ -665,6 +1096,13 @@ namespace MGK_Analyzer.Controls
                 Snapshot = snapshot,
                 CursorBrush = cursorBrush
             };
+			handle.OverlayLine = CreateCursorOverlayLine(cursorBrush);
+			var caps = CreateCursorOverlayCaps(cursorBrush);
+			if (caps.HasValue)
+			{
+				handle.OverlayTopCap = caps.Value.top;
+				handle.OverlayBottomCap = caps.Value.bottom;
+			}
 			annotation.Tag = handle;
 			annotation.DragDelta += CursorAnnotation_DragDelta;
 			annotation.DragCompleted += CursorAnnotation_DragCompleted;
@@ -685,6 +1123,8 @@ namespace MGK_Analyzer.Controls
             _cursorHandles.RemoveAt(_cursorHandles.Count - 1);
 			DetachCursorAnnotation(lastCursor);
 			ChartControl.Annotations?.Remove(lastCursor.Annotation);
+			DetachOverlayLine(lastCursor);
+			DetachOverlayCaps(lastCursor);
             if (lastCursor.Snapshot != null)
             {
                 SnapshotList.Remove(lastCursor.Snapshot);
@@ -709,9 +1149,6 @@ namespace MGK_Analyzer.Controls
 				case double axisDouble:
 					axisValue = axisDouble;
 					break;
-				case DateTime axisDateTimeValue:
-					axisValue = axisDateTimeValue.ToOADate();
-					break;
 				case IConvertible convertible:
 					axisValue = convertible.ToDouble(CultureInfo.InvariantCulture);
 					break;
@@ -730,8 +1167,7 @@ namespace MGK_Analyzer.Controls
 			handle.Index = targetIndex;
 			UpdateCursorAnnotation(handle);
 
-			var axisDateTime = DateTime.FromOADate(axisValue);
-			var secondsOffset = (axisDateTime - DataSet.BaseTime).TotalSeconds;
+			var secondsOffset = axisValue;
 			var interval = Math.Max(DataSet.TimeInterval, 0.001f);
 			var theoreticalIndex = secondsOffset / interval;
 			var indexError = handle.Index - theoreticalIndex;
@@ -793,7 +1229,7 @@ namespace MGK_Analyzer.Controls
 			}
 		}
 
-        private void UpdateCursorAnnotation(ChartCursorHandle handle)
+		private void UpdateCursorAnnotation(ChartCursorHandle handle)
         {
             if (DataSet == null)
             {
@@ -801,7 +1237,7 @@ namespace MGK_Analyzer.Controls
             }
 
             var sampleIndex = (int)Math.Clamp(Math.Round(handle.Index), 0, DataSet.TotalSamples - 1);
-            var cursorTime = DataSet.GetTimeAt(sampleIndex);
+			var cursorSeconds = DataSet.GetRelativeTimeAt(sampleIndex);
             var (minValue, maxValue) = GetVisibleValueRange();
             if (Math.Abs(maxValue - minValue) < 0.001)
             {
@@ -810,13 +1246,15 @@ namespace MGK_Analyzer.Controls
 
             if (handle.Annotation != null)
             {
-                handle.Annotation.X1 = cursorTime;
-                handle.Annotation.X2 = cursorTime;
+				handle.Annotation.X1 = cursorSeconds;
+				handle.Annotation.X2 = cursorSeconds;
                 handle.Annotation.Y1 = minValue;
                 handle.Annotation.Y2 = maxValue;
-                handle.Annotation.StrokeThickness = 2.5;
-                handle.Annotation.Stroke = handle.CursorBrush;
+				handle.Annotation.StrokeThickness = 3.5;
+				handle.Annotation.Opacity = 0.01;
             }
+
+			UpdateOverlayLine(handle);
 
 			if (!handle.IsDragging)
 			{
@@ -889,7 +1327,7 @@ namespace MGK_Analyzer.Controls
 			}
 		}
 
-        private void UpdateSnapshotForHandle(ChartCursorHandle handle)
+		private void UpdateSnapshotForHandle(ChartCursorHandle handle)
         {
 			if (DataSet == null || handle.Snapshot == null || handle.IsDragging)
             {
@@ -897,8 +1335,8 @@ namespace MGK_Analyzer.Controls
             }
 
             var sampleIndex = (int)Math.Clamp(Math.Round(handle.Index), 0, Math.Max(0, DataSet.TotalSamples - 1));
-            var cursorTime = DataSet.TotalSamples > 0 ? DataSet.GetTimeAt(sampleIndex) : default;
-            handle.Snapshot.CursorTime = cursorTime;
+			var cursorSeconds = DataSet.TotalSamples > 0 ? DataSet.GetRelativeTimeAt(sampleIndex) : 0.0;
+			handle.Snapshot.CursorTimeSeconds = cursorSeconds;
 
             var activeSeries = GetActiveSeriesData().ToList();
             UpdateSnapshotSeriesValues(handle.Snapshot, activeSeries, sampleIndex);
@@ -989,10 +1427,9 @@ namespace MGK_Analyzer.Controls
                 return false;
             }
 
-            var time = DateTime.FromOADate(axisValue);
-            var interval = Math.Max(DataSet.TimeInterval, 0.001f);
-            var seconds = (time - DataSet.BaseTime).TotalSeconds;
-            var index = (int)Math.Round(seconds / interval);
+			var interval = Math.Max(DataSet.TimeInterval, 0.001f);
+			var seconds = axisValue;
+			var index = (int)Math.Round(seconds / interval);
             sampleIndex = (int)Math.Clamp(index, 0, DataSet.TotalSamples - 1);
             return true;
         }
@@ -1059,6 +1496,8 @@ namespace MGK_Analyzer.Controls
 				foreach (var handle in _cursorHandles)
 				{
 					DetachCursorAnnotation(handle);
+					DetachOverlayLine(handle);
+					DetachOverlayCaps(handle);
 					if (handle.Annotation != null)
 					{
 						ChartControl.Annotations?.Remove(handle.Annotation);
@@ -1086,6 +1525,9 @@ namespace MGK_Analyzer.Controls
 	private sealed class ChartCursorHandle
 	{
 		public VerticalLineAnnotation? Annotation { get; set; }
+		public System.Windows.Shapes.Line? OverlayLine { get; set; }
+		public System.Windows.Shapes.Ellipse? OverlayTopCap { get; set; }
+		public System.Windows.Shapes.Ellipse? OverlayBottomCap { get; set; }
 		public double Index { get; set; }
 		public CursorSnapshotViewModel? Snapshot { get; set; }
 		public Brush CursorBrush { get; set; } = Brushes.Crimson;
@@ -1096,10 +1538,220 @@ namespace MGK_Analyzer.Controls
 		public bool IsDragging { get; set; }
 	}
 
+		private System.Windows.Shapes.Line? CreateCursorOverlayLine(Brush stroke)
+		{
+			if (_cursorOverlay == null)
+			{
+				return null;
+			}
+
+			var line = new System.Windows.Shapes.Line
+			{
+				Stroke = stroke,
+				StrokeThickness = 3.5,
+				StrokeDashArray = new DoubleCollection { 6, 4 },
+				StrokeStartLineCap = PenLineCap.Round,
+				StrokeEndLineCap = PenLineCap.Round,
+				StrokeDashCap = PenLineCap.Round,
+				SnapsToDevicePixels = true
+			};
+
+			_cursorOverlay.Children.Add(line);
+			return line;
+		}
+
+		private (System.Windows.Shapes.Ellipse top, System.Windows.Shapes.Ellipse bottom)? CreateCursorOverlayCaps(Brush stroke)
+		{
+			if (_cursorOverlay == null)
+			{
+				return null;
+			}
+
+			System.Windows.Shapes.Ellipse CreateCap()
+			{
+				return new System.Windows.Shapes.Ellipse
+				{
+					Width = 8,
+					Height = 8,
+					Fill = stroke,
+					Stroke = stroke,
+					StrokeThickness = 0,
+					SnapsToDevicePixels = true
+				};
+			}
+
+			var top = CreateCap();
+			var bottom = CreateCap();
+			_cursorOverlay.Children.Add(top);
+			_cursorOverlay.Children.Add(bottom);
+			return (top, bottom);
+		}
+
+		private void DetachOverlayLine(ChartCursorHandle handle)
+		{
+			if (handle.OverlayLine == null || _cursorOverlay == null)
+			{
+				return;
+			}
+
+			_cursorOverlay.Children.Remove(handle.OverlayLine);
+			handle.OverlayLine = null;
+		}
+
+		private void DetachOverlayCaps(ChartCursorHandle handle)
+		{
+			if (_cursorOverlay == null)
+			{
+				return;
+			}
+
+			if (handle.OverlayTopCap != null)
+			{
+				_cursorOverlay.Children.Remove(handle.OverlayTopCap);
+				handle.OverlayTopCap = null;
+			}
+			if (handle.OverlayBottomCap != null)
+			{
+				_cursorOverlay.Children.Remove(handle.OverlayBottomCap);
+				handle.OverlayBottomCap = null;
+			}
+		}
+
+		private void UpdateOverlayLine(ChartCursorHandle handle)
+		{
+			if (ChartControl == null || _cursorOverlay == null)
+			{
+				return;
+			}
+
+			var line = handle.OverlayLine;
+			if (line == null)
+			{
+				return;
+			}
+
+			if (handle.Annotation == null)
+			{
+				line.Visibility = Visibility.Collapsed;
+				return;
+			}
+
+			var cursorTime = handle.Annotation.X1;
+			var plotX = GetCursorPixelX(cursorTime);
+			if (plotX == null)
+			{
+				line.Visibility = Visibility.Collapsed;
+				return;
+			}
+
+			var chartToOverlay = ChartControl.TranslatePoint(new Point(plotX.Value, 0), _cursorOverlay).X;
+			if (double.IsNaN(chartToOverlay) || double.IsInfinity(chartToOverlay))
+			{
+				line.Visibility = Visibility.Collapsed;
+				return;
+			}
+
+			var height = _cursorOverlay.ActualHeight;
+			if (height <= 0)
+			{
+				height = ChartControl.ActualHeight;
+			}
+
+			line.Visibility = Visibility.Visible;
+			line.Stroke = handle.CursorBrush;
+			line.StrokeThickness = 3.5;
+			line.StrokeDashArray = new DoubleCollection { 6, 4 };
+			line.StrokeStartLineCap = PenLineCap.Round;
+			line.StrokeEndLineCap = PenLineCap.Round;
+			line.StrokeDashCap = PenLineCap.Round;
+			line.X1 = chartToOverlay;
+			line.X2 = chartToOverlay;
+			line.Y1 = 0;
+			line.Y2 = Math.Max(0, height);
+
+			// Visible rounded ends: caps are often clipped on a full-height vertical line.
+			if (handle.OverlayTopCap == null || handle.OverlayBottomCap == null)
+			{
+				var caps = CreateCursorOverlayCaps(handle.CursorBrush);
+				if (caps.HasValue)
+				{
+					handle.OverlayTopCap = caps.Value.top;
+					handle.OverlayBottomCap = caps.Value.bottom;
+				}
+			}
+
+			if (handle.OverlayTopCap != null && handle.OverlayBottomCap != null)
+			{
+				var capSize = handle.OverlayTopCap.Width;
+				handle.OverlayTopCap.Fill = handle.CursorBrush;
+				handle.OverlayBottomCap.Fill = handle.CursorBrush;
+				handle.OverlayTopCap.Visibility = Visibility.Visible;
+				handle.OverlayBottomCap.Visibility = Visibility.Visible;
+				Canvas.SetLeft(handle.OverlayTopCap, chartToOverlay - capSize / 2);
+				Canvas.SetTop(handle.OverlayTopCap, 0 - capSize / 2);
+				Canvas.SetLeft(handle.OverlayBottomCap, chartToOverlay - capSize / 2);
+				Canvas.SetTop(handle.OverlayBottomCap, Math.Max(0, height) - capSize / 2);
+			}
+		}
+
+		private double? GetCursorPixelX(object? axisValue)
+		{
+			if (ChartControl == null)
+			{
+				return null;
+			}
+
+			var visible = ChartControl.PrimaryAxis?.VisibleRange;
+			var start = visible?.Start ?? double.NaN;
+			var end = visible?.End ?? double.NaN;
+			if (double.IsNaN(start) || double.IsNaN(end) || Math.Abs(end - start) < 1e-12)
+			{
+				return null;
+			}
+
+			double value;
+			switch (axisValue)
+			{
+				case DateTime dt:
+					value = dt.ToOADate();
+					break;
+				case double d:
+					value = d;
+					break;
+				case IConvertible conv:
+					value = conv.ToDouble(CultureInfo.InvariantCulture);
+					break;
+				default:
+					return null;
+			}
+
+			var normalized = (value - start) / (end - start);
+			if (double.IsNaN(normalized) || double.IsInfinity(normalized))
+			{
+				return null;
+			}
+			normalized = Math.Clamp(normalized, 0, 1);
+
+			try
+			{
+				var clip = ChartControl.SeriesClipRect;
+				if (clip.Width > 0)
+				{
+					return clip.X + normalized * clip.Width;
+				}
+			}
+			catch
+			{
+				// ignore and fall back
+			}
+
+			return normalized * ChartControl.ActualWidth;
+		}
+
         public sealed class CursorSnapshotViewModel : INotifyPropertyChanged
         {
             private int _cursorIndex;
-            private DateTime _cursorTime;
+			private double _cursorTimeSeconds;
             private Brush _cursorBrush = Brushes.Gray;
 
             public int CursorIndex
@@ -1116,14 +1768,14 @@ namespace MGK_Analyzer.Controls
                 }
             }
 
-            public DateTime CursorTime
+			public double CursorTimeSeconds
             {
-                get => _cursorTime;
+				get => _cursorTimeSeconds;
                 set
                 {
-                    if (_cursorTime != value)
+					if (Math.Abs(_cursorTimeSeconds - value) > 0.0000001)
                     {
-                        _cursorTime = value;
+						_cursorTimeSeconds = value;
                         OnPropertyChanged();
                         OnPropertyChanged(nameof(CursorTimeDisplay));
                     }
@@ -1131,7 +1783,7 @@ namespace MGK_Analyzer.Controls
             }
 
             public string CursorLabel => $"Cursor {_cursorIndex}";
-            public string CursorTimeDisplay => _cursorTime == default ? "-" : _cursorTime.ToString("yyyy-MM-dd HH:mm:ss.fff");
+			public string CursorTimeDisplay => _cursorTimeSeconds <= 0 ? "0.000 s" : $"{_cursorTimeSeconds:0.###} s";
             public Brush CursorBrush
             {
                 get => _cursorBrush;
@@ -1676,6 +2328,82 @@ namespace MGK_Analyzer.Controls
                 SetWindowSize(dialog.SelectedWidth, dialog.SelectedHeight);
             }
         }
+
+        private void ExportDataTable_Click(object sender, RoutedEventArgs e)
+        {
+            if (_dataTableBackingStore == null || _dataTableBackingStore.Rows.Count == 0)
+            {
+                MessageBox.Show("내보낼 데이터가 없습니다.", "엑셀 내보내기", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+
+            var saveDialog = new SaveFileDialog
+            {
+                Filter = "Excel 통합 문서 (*.xlsx)|*.xlsx",
+                FileName = string.IsNullOrWhiteSpace(WindowTitle)
+                    ? "ChartData"
+                    : $"{WindowTitle.Replace(' ', '_')}"
+            };
+
+            if (saveDialog.ShowDialog() != true)
+            {
+                return;
+            }
+
+            try
+            {
+                ExcelPackage.LicenseContext = OfficeOpenXml.LicenseContext.NonCommercial;
+                using var package = new ExcelPackage();
+                var worksheet = package.Workbook.Worksheets.Add("Data");
+                worksheet.Cells["A1"].LoadFromDataTable(_dataTableBackingStore, true, TableStyles.Medium6);
+                worksheet.Cells[worksheet.Dimension.Address].AutoFitColumns();
+                package.SaveAs(new FileInfo(saveDialog.FileName));
+
+                MessageBox.Show("데이터가 Excel 파일로 저장되었습니다.", "엑셀 내보내기", MessageBoxButton.OK, MessageBoxImage.Information);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"엑셀 내보내기 중 오류가 발생했습니다: {ex.Message}", "엑셀 내보내기", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
+		private void PreviousPage_Click(object sender, RoutedEventArgs e)
+		{
+			if (_currentPageIndex <= 0)
+			{
+				return;
+			}
+
+			LoadPage(_currentPageIndex - 1);
+		}
+
+		private void NextPage_Click(object sender, RoutedEventArgs e)
+		{
+			if (TotalPageCount == 0 || _currentPageIndex >= TotalPageCount - 1)
+			{
+				return;
+			}
+
+			LoadPage(_currentPageIndex + 1);
+		}
+
+		private void GoToPage_Click(object sender, RoutedEventArgs e)
+		{
+			if (TotalPageCount == 0 || PageNumberTextBox == null)
+			{
+				return;
+			}
+
+			if (!int.TryParse(PageNumberTextBox.Text, NumberStyles.Integer, CultureInfo.InvariantCulture, out var requestedPage))
+			{
+				MessageBox.Show("Enter a valid page number.", "Paging", MessageBoxButton.OK, MessageBoxImage.Information);
+				UpdatePageNumberTextBox();
+				return;
+			}
+
+			requestedPage = Math.Clamp(requestedPage, 1, TotalPageCount);
+			LoadPage(requestedPage - 1);
+		}
 
         #endregion
 
