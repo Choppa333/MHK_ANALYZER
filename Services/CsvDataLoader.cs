@@ -19,6 +19,12 @@ namespace MGK_Analyzer.Services
             Brushes.Brown, Brushes.Pink, Brushes.Gray, Brushes.Olive, Brushes.Navy
         };
 
+        static CsvDataLoader()
+        {
+            // EUC-KR 등 코드 페이지 기반 인코딩을 사용할 수 있도록 등록.
+            Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
+        }
+
         public async Task<MemoryOptimizedDataSet> LoadCsvDataAsync(string filePath, IProgress<int> progress = null)
         {
             using var overallTimer = PerformanceLogger.Instance.StartTimer($"전체 CSV 로딩: {Path.GetFileName(filePath)}", "CSV_Loading");
@@ -39,39 +45,25 @@ namespace MGK_Analyzer.Services
                 PerformanceLogger.Instance.LogInfo($"파일 크기: {fileSizeMB:F2}MB", "CSV_Loading");
                 progress?.Report(5);
 
-                // 여러 인코딩 시도하여 한글 깨짐 방지
-                StreamReader reader = null;
-                using var encodingTimer = PerformanceLogger.Instance.StartTimer("인코딩 감지 및 파일 열기", "CSV_Loading");
-                try
+                Encoding detectedEncoding;
+                using (var encodingTimer = PerformanceLogger.Instance.StartTimer("인코딩 감지 및 파일 열기", "CSV_Loading"))
                 {
-                    reader = new StreamReader(filePath, new UTF8Encoding(true), true, 1024 * 1024); // 1MB 버퍼
-                    PerformanceLogger.Instance.LogInfo("UTF-8 BOM 인코딩으로 파일 열기 성공", "CSV_Loading");
+                    detectedEncoding = DetectEncoding(filePath);
+                    PerformanceLogger.Instance.LogInfo($"선택된 인코딩: {detectedEncoding.WebName}", "CSV_Loading");
                 }
-                catch
-                {
-                    try
-                    {
-                        reader = new StreamReader(filePath, Encoding.UTF8, true, 1024 * 1024);
-                        PerformanceLogger.Instance.LogInfo("UTF-8 인코딩으로 파일 열기 성공", "CSV_Loading");
-                    }
-                    catch
-                    {
-                        reader = new StreamReader(filePath, Encoding.GetEncoding("EUC-KR"), true, 1024 * 1024);
-                        PerformanceLogger.Instance.LogInfo("EUC-KR 인코딩으로 파일 열기 성공", "CSV_Loading");
-                    }
-                }
-                encodingTimer.Dispose();
 
-                using (reader)
+                using (var reader = new StreamReader(filePath, detectedEncoding, true, 1024 * 1024))
                 {
                     // 헤더 및 메타 정보 읽기 (# 로 시작하는 메타 라인 스킵)
                     using var headerTimer = PerformanceLogger.Instance.StartTimer("헤더 정보 읽기", "CSV_Loading");
 
                     var meta = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-                    var nonMetaLines = new List<string>(3);
-                    string line;
+                    string? headersLine = null;
+                    string? dataTypesLine = null;
+                    string? unitsLine = null;
+                    string? line;
 
-                    while (nonMetaLines.Count < 3 && (line = await reader.ReadLineAsync()) != null)
+                    while ((line = await reader.ReadLineAsync()) != null)
                     {
                         if (string.IsNullOrWhiteSpace(line))
                             continue;
@@ -90,17 +82,31 @@ namespace MGK_Analyzer.Services
                             continue;
                         }
 
-                        nonMetaLines.Add(line);
+                        var trimmed = line.TrimStart();
+
+                        if (dataTypesLine == null && trimmed.StartsWith("DATA_TYPE", StringComparison.OrdinalIgnoreCase))
+                        {
+                            dataTypesLine = line;
+                        }
+                        else if (unitsLine == null && trimmed.StartsWith("UNIT", StringComparison.OrdinalIgnoreCase))
+                        {
+                            unitsLine = line;
+                        }
+                        else if (headersLine == null)
+                        {
+                            headersLine = line;
+                        }
+
+                        if (headersLine != null && dataTypesLine != null && unitsLine != null)
+                        {
+                            break;
+                        }
                     }
 
-                    if (nonMetaLines.Count < 3)
+                    if (string.IsNullOrWhiteSpace(headersLine) || string.IsNullOrWhiteSpace(dataTypesLine) || string.IsNullOrWhiteSpace(unitsLine))
                     {
-                        throw new InvalidDataException("CSV 파일의 헤더 정보가 올바르지 않습니다. 메타라인 후 3행의 헤더가 필요합니다.");
+                        throw new InvalidDataException("CSV 파일의 헤더/DATA_TYPE/UNIT 정보가 올바르지 않습니다.");
                     }
-
-                    var headersLine = nonMetaLines[0];
-                    var dataTypesLine = nonMetaLines[1];
-                    var unitsLine = nonMetaLines[2];
 
                     var headers = headersLine.Split(',');
                     var dataTypes = dataTypesLine.Split(',');
@@ -145,7 +151,7 @@ namespace MGK_Analyzer.Services
                     using (var estimateTimer = PerformanceLogger.Instance.StartTimer("행 수 추정", "CSV_Loading"))
                     {
                         // Use a separate reader for sampling so we don't disturb the main reader's buffer/position
-                        estimatedRows = await EstimateRowCountAsync(filePath, fileSizeMB);
+                        estimatedRows = await EstimateRowCountAsync(filePath, fileSizeMB, detectedEncoding);
                         PerformanceLogger.Instance.LogInfo($"추정 행 수: {estimatedRows:N0}", "CSV_Loading");
                     }
                     progress?.Report(15);
@@ -225,7 +231,7 @@ namespace MGK_Analyzer.Services
             }
         }
 
-        private async Task<int> EstimateRowCountAsync(string filePath, double fileSizeMB)
+        private async Task<int> EstimateRowCountAsync(string filePath, double fileSizeMB, Encoding encoding)
         {
             // Create a short-lived reader for sampling so the main reader state is not disturbed.
             var sampleLines = 0;
@@ -233,7 +239,7 @@ namespace MGK_Analyzer.Services
             const int SAMPLE_SIZE = 50;
 
             using (var fs = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read))
-            using (var sampleReader = new StreamReader(fs, Encoding.UTF8, true, 1024 * 1024))
+            using (var sampleReader = new StreamReader(fs, encoding, true, 1024 * 1024))
             {
                 for (int i = 0; i < SAMPLE_SIZE && !sampleReader.EndOfStream; i++)
                 {
@@ -254,6 +260,71 @@ namespace MGK_Analyzer.Services
             }
 
             return (int)(fileSizeMB * 1000);
+        }
+
+        private Encoding DetectEncoding(string filePath)
+        {
+            var eucKr = Encoding.GetEncoding("EUC-KR");
+            var utf8Bom = new UTF8Encoding(true);
+            var utf8 = new UTF8Encoding(false);
+
+            var candidates = new (Encoding encoding, bool detectBom)[]
+            {
+                (utf8Bom, true),
+                (utf8, true),
+                (eucKr, false)
+            };
+
+            foreach (var candidate in candidates)
+            {
+                if (TrySampleWithEncoding(filePath, candidate.encoding, candidate.detectBom, out var sample) && !LooksCorrupted(sample))
+                {
+                    return candidate.encoding;
+                }
+            }
+
+            return Encoding.UTF8;
+        }
+
+        private static bool TrySampleWithEncoding(string filePath, Encoding encoding, bool detectBom, out string sample)
+        {
+            sample = string.Empty;
+            try
+            {
+                const int SAMPLE_CHAR_COUNT = 2048;
+                using var fs = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read);
+                using var reader = new StreamReader(fs, encoding, detectBom, 4096, leaveOpen: false);
+                var buffer = new char[SAMPLE_CHAR_COUNT];
+                var read = reader.Read(buffer, 0, SAMPLE_CHAR_COUNT);
+                if (read <= 0)
+                {
+                    return false;
+                }
+
+                sample = new string(buffer, 0, read);
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private static bool LooksCorrupted(string sample)
+        {
+            if (string.IsNullOrEmpty(sample))
+            {
+                return false;
+            }
+
+            var replacementCount = sample.Count(c => c == '\uFFFD');
+            if (replacementCount == 0)
+            {
+                return false;
+            }
+
+            var ratio = (double)replacementCount / sample.Length;
+            return replacementCount > 2 || ratio > 0.001;
         }
 
         private static SeriesData?[] CreateColumnMap(string[] headers, Dictionary<string, SeriesData> seriesDict)
