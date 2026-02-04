@@ -154,8 +154,9 @@
                                 </Border>
 
                                 <!-- Panel Content -->
-                                <TabControl Grid.Row="1" Background="Transparent"
-                                           BorderThickness="0" Margin="5">
+                                <TabControl x:Name="LeftPanelTabs" Grid.Row="1" Background="Transparent"
+                                           BorderThickness="0" Margin="5"
+                                           SelectionChanged="LeftPanelTabs_SelectionChanged">
                                     <TabItem Header="Snapshot" FontFamily="Malgun Gothic" FontSize="11">
                                         <Grid Margin="0,5,0,0">
                                             <Grid.RowDefinitions>
@@ -424,8 +425,9 @@
                                 </Border>
 
                                 <!-- Panel Content -->
-                                <TabControl Grid.Row="1" Background="Transparent" 
-                                           BorderThickness="0" Margin="5">
+                                <TabControl x:Name="ManagementPanelTabs" Grid.Row="1" Background="Transparent" 
+                                           BorderThickness="0" Margin="5"
+                                           SelectionChanged="ManagementPanelTabs_SelectionChanged">
                                     <!-- Series Tab -->
                                     <TabItem Header="Series" FontFamily="Malgun Gothic" FontSize="11">
                                         <ScrollViewer VerticalScrollBarVisibility="Auto">

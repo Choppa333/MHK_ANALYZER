@@ -19,17 +19,39 @@ namespace MGK_Analyzer.Services
             Brushes.Brown, Brushes.Pink, Brushes.Gray, Brushes.Olive, Brushes.Navy
         };
 
+		private static Brush GetDeterministicSeriesColor(string seriesName)
+		{
+			if (string.IsNullOrWhiteSpace(seriesName))
+			{
+				return DefaultColors[0];
+			}
+
+			// Stable across runs: avoid string.GetHashCode() (randomized)
+			unchecked
+			{
+				uint hash = 2166136261;
+				foreach (var ch in seriesName.Trim())
+				{
+					hash ^= ch;
+					hash *= 16777619;
+				}
+
+				var index = (int)(hash % (uint)DefaultColors.Length);
+				return DefaultColors[index];
+			}
+		}
+
         static CsvDataLoader()
         {
-            // EUC-KR 등 코드 페이지 기반 인코딩을 사용할 수 있도록 등록.
-            Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
-        }
+			// EUC-KR 등 코드 페이지 기반 인코딩을 사용할 수 있도록 등록.
+			Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
+		}
 
-        public async Task<MemoryOptimizedDataSet> LoadCsvDataAsync(
-            string filePath,
-            IProgress<int>? progress = null,
-            int? expectedMetaType = 0,
-            bool requireMetaTypeMatch = false)
+		public async Task<MemoryOptimizedDataSet> LoadCsvDataAsync(
+			string filePath,
+			IProgress<int>? progress = null,
+			int? expectedMetaType = 0,
+			bool requireMetaTypeMatch = false)
         {
             using var overallTimer = PerformanceLogger.Instance.StartTimer($"전체 CSV 로딩: {Path.GetFileName(filePath)}", "CSV_Loading");
             
@@ -191,7 +213,7 @@ namespace MGK_Analyzer.Services
                                 DataType = typeName == "bit" ? typeof(bool) : typeof(double),
                                 Values = new float[estimatedRows],
                                 BitValues = typeName == "bit" ? new System.Collections.BitArray(estimatedRows) : null,
-                                Color = DefaultColors[colorIndex % DefaultColors.Length],
+								Color = GetDeterministicSeriesColor(headerName),
                                 IsVisible = false
                             };
                             seriesDict[series.Name] = series;

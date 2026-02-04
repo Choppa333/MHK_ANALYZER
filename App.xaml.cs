@@ -18,7 +18,7 @@ namespace MGK_Analyzer
         protected override void OnStartup(StartupEventArgs e)
         {
             // Syncfusion Community License 등록
-            SyncfusionLicenseProvider.RegisterLicense("Ngo9BigBOggjHTQxAR8/V1JFaF5cXGRCf1FpRmJGdld5fUVHYVZUTXxaS00DNHVRdkdmWXZed3RQQmBdUkJ+XEBWYEg=");
+            SyncfusionLicenseProvider.RegisterLicense("Ngo9BigBOggjHTQxAR8/V1JGaF5cX2dCf1FpRmJGdld5fUVHYVZUTXxaS00DNHVRdkdlWX5cdnRURWBcWEd+X0BWYEs=");
             SfSkinManager.ApplyStylesOnApplication = true;
             
 #if DEBUG

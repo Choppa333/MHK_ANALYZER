@@ -15,9 +15,16 @@
     <None Include="Samples\SfChartSampleProject\SfChartSampleProject.csproj" />
   </ItemGroup>
 
+  <!-- Exclude benchmark project sources from this WPF app build -->
+  <ItemGroup>
+    <Compile Remove="BenchmarkSuite1\**\*.cs" />
+    <None Remove="BenchmarkSuite1\**" />
+  </ItemGroup>
+
   <ItemGroup>
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.0" />
     <PackageReference Include="EPPlus" Version="8.2.1" />
+    <PackageReference Include="Syncfusion.DocIO.Net.Core" Version="32.1.24" />
     <PackageReference Include="Syncfusion.SfChart.WPF" Version="31.1.17" />
     <PackageReference Include="Syncfusion.SfGrid.WPF" Version="31.1.17" />
     <PackageReference Include="Syncfusion.Themes.FluentLight.WPF" Version="31.1.17" />
@@ -40,6 +47,10 @@
   </ItemGroup>
   <ItemGroup>
     <Folder Include="CsvSampleGenerator\" />
+    <Folder Include="Services\Analysis\Models\" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\KCS_Eff_LIB\KCS_Eff_LIB.csproj" />
   </ItemGroup>
   <ItemGroup>
     <None Update="LoadCurve_Test_Sample_5000.csv">

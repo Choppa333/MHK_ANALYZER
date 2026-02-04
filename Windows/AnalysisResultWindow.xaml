@@ -1,0 +1,336 @@
+<Window x:Class="MGK_Analyzer.Windows.AnalysisResultWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:syncfusion="http://schemas.syncfusion.com/wpf"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d"
+        Title="Analysis Result" Height="700" Width="900" MinHeight="600" MinWidth="800" WindowStartupLocation="CenterOwner">
+    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+        <StackPanel Margin="12" Orientation="Vertical">
+            <Border Margin="0,0,0,8" BorderBrush="#FFDDDDDD" BorderThickness="1" CornerRadius="6" Padding="14" Background="#FFFAFAFA">
+                <StackPanel>
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+
+                        <TextBlock Grid.Row="0" Grid.Column="0" Text="{Binding ReportTitle}" FontSize="18" FontWeight="SemiBold" />
+                        <StackPanel Grid.Row="0" Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                            <TextBlock Text="{Binding ReportDate}" Foreground="#FF666666" VerticalAlignment="Center" />
+                            <Button Content="Export to Word" Margin="12,0,0,0" Padding="10,3" Click="ExportToWord_Click" />
+                        </StackPanel>
+
+                        <Grid Grid.Row="1" Grid.ColumnSpan="2" Margin="0,12,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="2*" />
+                                <ColumnDefinition Width="3*" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0">
+                                <TextBlock Text="Source" FontWeight="SemiBold" Foreground="#FF555555" />
+                                <Grid Margin="0,8,0,0">
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                    </Grid.RowDefinitions>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="110" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Grid.Row="0" Grid.Column="0" Text="Tester" Foreground="#FF666666" />
+                                    <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding TesterName}" TextTrimming="CharacterEllipsis" />
+                                    <TextBlock Grid.Row="1" Grid.Column="0" Text="No-Load CSV" Foreground="#FF666666" />
+                                    <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding NoLoadCsvPath}" TextTrimming="CharacterEllipsis" />
+                                    <TextBlock Grid.Row="2" Grid.Column="0" Text="Load CSV" Foreground="#FF666666" />
+                                    <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding LoadCsvPath}" TextTrimming="CharacterEllipsis" />
+                                </Grid>
+                            </StackPanel>
+                            <StackPanel Grid.Column="1" Margin="24,0,0,0">
+                                <TextBlock Text="Inputs" FontWeight="SemiBold" Foreground="#FF555555" />
+                                <Grid Margin="0,8,0,0">
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                    </Grid.RowDefinitions>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="120" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Grid.Row="0" Grid.Column="0" Text="Rated V" Foreground="#FF666666" />
+                                    <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding MotorRatedVoltage}" />
+                                    <TextBlock Grid.Row="1" Grid.Column="0" Text="Rated f" Foreground="#FF666666" />
+                                    <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding MotorRatedFrequency}" />
+                                    <TextBlock Grid.Row="2" Grid.Column="0" Text="Pole" Foreground="#FF666666" />
+                                    <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding MotorPoleCount}" />
+                                    <TextBlock Grid.Row="3" Grid.Column="0" Text="Rated P" Foreground="#FF666666" />
+                                    <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding MotorRatedPower}" />
+                                    <TextBlock Grid.Row="4" Grid.Column="0" Text="Coolant" Foreground="#FF666666" />
+                                    <TextBlock Grid.Row="4" Grid.Column="1" Text="{Binding TempCoolant}" />
+                                    <TextBlock Grid.Row="5" Grid.Column="0" Text="K_cond" Foreground="#FF666666" />
+                                    <TextBlock Grid.Row="5" Grid.Column="1" Text="{Binding TempConductorCoeff}" />
+                                    <TextBlock Grid.Row="6" Grid.Column="0" Text="Theta0" Foreground="#FF666666" />
+                                    <TextBlock Grid.Row="6" Grid.Column="1" Text="{Binding TempResistanceMeasure}" />
+                                    <TextBlock Grid.Row="7" Grid.Column="0" Text="Theta_w" Foreground="#FF666666" />
+                                    <TextBlock Grid.Row="7" Grid.Column="1" Text="{Binding TempWindingRated}" />
+                                </Grid>
+                            </StackPanel>
+                        </Grid>
+                    </Grid>
+                </StackPanel>
+            </Border>
+
+            <Border Margin="0,0,0,8" BorderBrush="#FFDDDDDD" BorderThickness="1" CornerRadius="6" Padding="14" Background="#FFFFFFFF">
+                <UniformGrid Columns="3" Rows="2">
+                    <StackPanel>
+                        <TextBlock Text="Overview" FontWeight="SemiBold" Foreground="#FF555555" />
+                        <TextBlock Text="Regression coeff A" Margin="0,4,0,0" Foreground="#FF666666" />
+                        <TextBlock Text="{Binding LldA}" FontSize="14" FontWeight="SemiBold" />
+                    </StackPanel>
+                    <StackPanel>
+                        <TextBlock Text="Regression coeff B" FontWeight="SemiBold" Foreground="#FF555555" />
+                        <TextBlock Text="{Binding LldB}" Margin="0,4,0,0" FontSize="14" FontWeight="SemiBold" />
+                    </StackPanel>
+                    <StackPanel>
+                        <TextBlock Text="Correlation gamma" FontWeight="SemiBold" Foreground="#FF555555" />
+                        <TextBlock Text="{Binding Correlation}" Margin="0,4,0,0" FontSize="14" FontWeight="SemiBold" />
+                    </StackPanel>
+                    <StackPanel>
+                        <TextBlock Text="DC R12" FontWeight="SemiBold" Foreground="#FF555555" />
+                        <TextBlock Text="{Binding DcR12}" Margin="0,4,0,0" FontSize="14" FontWeight="SemiBold" />
+                    </StackPanel>
+                    <StackPanel>
+                        <TextBlock Text="DC R23" FontWeight="SemiBold" Foreground="#FF555555" />
+                        <TextBlock Text="{Binding DcR23}" Margin="0,4,0,0" FontSize="14" FontWeight="SemiBold" />
+                    </StackPanel>
+                    <StackPanel>
+                        <TextBlock Text="DC R31" FontWeight="SemiBold" Foreground="#FF555555" />
+                        <TextBlock Text="{Binding DcR31}" Margin="0,4,0,0" FontSize="14" FontWeight="SemiBold" />
+                    </StackPanel>
+                </UniformGrid>
+            </Border>
+
+            <!-- Summary and tables -->
+            <StackPanel x:Name="SummaryAndTables" Orientation="Vertical">
+                <Border Margin="0,0,0,8" BorderBrush="#FFDDDDDD" BorderThickness="1" CornerRadius="6" Padding="12" Background="#FFFFFFFF">
+                    <StackPanel>
+                        <TextBlock Text="Rated Point Summary" FontWeight="SemiBold" FontSize="14" Foreground="#FF444444" />
+                        <UniformGrid Columns="2" Rows="5" Margin="0,12,0,0">
+                            <StackPanel>
+                                <TextBlock Text="Input Power P1" Foreground="#FF666666" />
+                                <TextBlock Text="{Binding RatedSummary.InputPowerP1, StringFormat={}{0:0.###} W}" FontWeight="Bold" />
+                            </StackPanel>
+                            <StackPanel>
+                                <TextBlock Text="Output Power P2" Foreground="#FF666666" />
+                                <TextBlock Text="{Binding RatedSummary.OutputPowerP2, StringFormat={}{0:0.###} W}" FontWeight="Bold" />
+                            </StackPanel>
+                            <StackPanel>
+                                <TextBlock Text="Stator Copper Loss" Foreground="#FF666666" />
+                                <TextBlock Text="{Binding RatedSummary.StatorCopperLossPCuS, StringFormat={}{0:0.###} W}" FontWeight="Bold" />
+                            </StackPanel>
+                            <StackPanel>
+                                <TextBlock Text="Rotor Copper Loss" Foreground="#FF666666" />
+                                <TextBlock Text="{Binding RatedSummary.RotorCopperLossPCuR, StringFormat={}{0:0.###} W}" FontWeight="Bold" />
+                            </StackPanel>
+                            <StackPanel>
+                                <TextBlock Text="Residual Loss" Foreground="#FF666666" />
+                                <TextBlock Text="{Binding RatedSummary.ResidualLossPRes, StringFormat={}{0:0.###} W}" FontWeight="Bold" />
+                            </StackPanel>
+                            <StackPanel>
+                                <TextBlock Text="Iron Loss" Foreground="#FF666666" />
+                                <TextBlock Text="{Binding RatedSummary.IronLossPFe, StringFormat={}{0:0.###} W}" FontWeight="Bold" />
+                            </StackPanel>
+                            <StackPanel>
+                                <TextBlock Text="Friction Windage" Foreground="#FF666666" />
+                                <TextBlock Text="{Binding RatedSummary.FrictionWindageLossPFw, StringFormat={}{0:0.###} W}" FontWeight="Bold" />
+                            </StackPanel>
+                            <StackPanel>
+                                <TextBlock Text="Additional Load Loss" Foreground="#FF666666" />
+                                <TextBlock Text="{Binding RatedSummary.AdditionalLossPLL, StringFormat={}{0:0.###} W}" FontWeight="Bold" />
+                            </StackPanel>
+                            <StackPanel>
+                                <TextBlock Text="Total Loss" Foreground="#FF666666" />
+                                <TextBlock Text="{Binding RatedSummary.TotalLossPLoss, StringFormat={}{0:0.###} W}" FontWeight="Bold" />
+                            </StackPanel>
+                            <StackPanel>
+                                <TextBlock Text="Calculated Efficiency" Foreground="#FF666666" />
+                                <TextBlock Text="{Binding RatedSummary.Efficiency, StringFormat={}{0:P2}}" FontWeight="Bold" />
+                            </StackPanel>
+                        </UniformGrid>
+                    </StackPanel>
+                </Border>
+
+                <Border Margin="0,0,0,8" BorderBrush="#FFDDDDDD" BorderThickness="1" CornerRadius="6" Padding="12" Background="#FFFFFFFF">
+                    <StackPanel>
+                        <TextBlock Text="Rated Point Overview" FontWeight="SemiBold" FontSize="14" Foreground="#FF444444" />
+                        <Grid Margin="0,12,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="32" />
+                                <RowDefinition Height="32" />
+                            </Grid.RowDefinitions>
+                            <Border Grid.Row="0" Grid.ColumnSpan="11" Background="#FF1F4E79" CornerRadius="4" Padding="0" />
+                            <TextBlock Grid.Row="0" Grid.Column="0" Text="P1(W)" Foreground="#FFF5F5F5" FontWeight="SemiBold" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            <TextBlock Grid.Row="0" Grid.Column="1" Text="P2(W)" Foreground="#FFF5F5F5" FontWeight="SemiBold" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            <TextBlock Grid.Row="0" Grid.Column="2" Text="P_Cu,s(W)" Foreground="#FFF5F5F5" FontWeight="SemiBold" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            <TextBlock Grid.Row="0" Grid.Column="3" Text="P_Cu,r(W)" Foreground="#FFF5F5F5" FontWeight="SemiBold" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            <TextBlock Grid.Row="0" Grid.Column="4" Text="P_res(W)" Foreground="#FFF5F5F5" FontWeight="SemiBold" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            <TextBlock Grid.Row="0" Grid.Column="5" Text="P_Fe(W)" Foreground="#FFF5F5F5" FontWeight="SemiBold" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            <TextBlock Grid.Row="0" Grid.Column="6" Text="P_fw(W)" Foreground="#FFF5F5F5" FontWeight="SemiBold" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            <TextBlock Grid.Row="0" Grid.Column="7" Text="P_LL(W)" Foreground="#FFF5F5F5" FontWeight="SemiBold" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            <TextBlock Grid.Row="0" Grid.Column="8" Text="P_loss(W)" Foreground="#FFF5F5F5" FontWeight="SemiBold" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            <TextBlock Grid.Row="0" Grid.Column="9" Text="&#x03B7;_calc" Foreground="#FFF5F5F5" FontWeight="SemiBold" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            <TextBlock Grid.Row="0" Grid.Column="10" Text="STEP" Foreground="#FFF5F5F5" FontWeight="SemiBold" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            <Border Grid.Row="1" Grid.ColumnSpan="11" Background="#FFF4D8CF" CornerRadius="4" />
+                            <Border Grid.Row="1" Grid.Column="9" Background="#FFDFF0D6" CornerRadius="4" />
+                            <TextBlock Grid.Row="1" Grid.Column="0" Text="{Binding RatedSummary.InputPowerP1, StringFormat={}{0:0.###}}" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding RatedSummary.OutputPowerP2, StringFormat={}{0:0.###}}" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            <TextBlock Grid.Row="1" Grid.Column="2" Text="{Binding RatedSummary.StatorCopperLossPCuS, StringFormat={}{0:0.###}}" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            <TextBlock Grid.Row="1" Grid.Column="3" Text="{Binding RatedSummary.RotorCopperLossPCuR, StringFormat={}{0:0.###}}" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            <TextBlock Grid.Row="1" Grid.Column="4" Text="{Binding RatedSummary.ResidualLossPRes, StringFormat={}{0:0.###}}" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            <TextBlock Grid.Row="1" Grid.Column="5" Text="{Binding RatedSummary.IronLossPFe, StringFormat={}{0:0.###}}" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            <TextBlock Grid.Row="1" Grid.Column="6" Text="{Binding RatedSummary.FrictionWindageLossPFw, StringFormat={}{0:0.###}}" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            <TextBlock Grid.Row="1" Grid.Column="7" Text="{Binding RatedSummary.AdditionalLossPLL, StringFormat={}{0:0.###}}" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            <TextBlock Grid.Row="1" Grid.Column="8" Text="{Binding RatedSummary.TotalLossPLoss, StringFormat={}{0:0.###}}" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            <TextBlock Grid.Row="1" Grid.Column="9" Text="{Binding RatedSummary.Efficiency, StringFormat={}{0:P2}}" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            <TextBlock Grid.Row="1" Grid.Column="10" Text="{Binding RatedSummary.LoadPct, StringFormat={}{0:0.##}%}" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Grid>
+                    </StackPanel>
+                </Border>
+
+                <Border Margin="0,0,0,8" BorderBrush="#FFDDDDDD" BorderThickness="1" CornerRadius="6" Padding="12" Background="#FFFFFFFF">
+                    <StackPanel>
+                        <TextBlock Text="No-Load Table" FontWeight="SemiBold" FontSize="14" Foreground="#FF444444" />
+                        <DataGrid ItemsSource="{Binding NoLoadCalcRows}" AutoGenerateColumns="False" IsReadOnly="True" CanUserAddRows="False" HeadersVisibility="Column" Margin="0,12,0,0" RowHeaderWidth="0" MinHeight="120">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="STEP (%)" Binding="{Binding StepPoint, StringFormat={}{0:0.##}}" Width="*" />
+                                <DataGridTextColumn Header="RLL" Binding="{Binding Rll, StringFormat={}{0:0.###}}" Width="*" />
+                                <DataGridTextColumn Header="P_Cu,s0 (W)" Binding="{Binding StatorCopperLoss, StringFormat={}{0:0.###}}" Width="*" />
+                                <DataGridTextColumn Header="P0' (W)" Binding="{Binding CorrectedNoLoadPower, StringFormat={}{0:0.###}}" Width="*" />
+                            </DataGrid.Columns>
+                        </DataGrid>
+                        <Grid Margin="0,8,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0">
+                                <TextBlock Text="Friction Windage" Foreground="#FF666666" />
+                                <TextBlock Text="{Binding NoLoadSummary.FrictionWindageLoss, StringFormat={}{0:0.###} W}" FontWeight="Bold" />
+                            </StackPanel>
+                            <StackPanel Grid.Column="1">
+                                <TextBlock Text="Iron Loss" Foreground="#FF666666" />
+                                <TextBlock Text="{Binding NoLoadSummary.IronLoss, StringFormat={}{0:0.###} W}" FontWeight="Bold" />
+                            </StackPanel>
+                        </Grid>
+                    </StackPanel>
+                </Border>
+
+                <Border Margin="0,0,0,8" BorderBrush="#FFDDDDDD" BorderThickness="1" CornerRadius="6" Padding="12" Background="#FFFFFFFF">
+                    <StackPanel>
+                        <TextBlock Text="Load Table" FontWeight="SemiBold" FontSize="14" Foreground="#FF444444" />
+                        <DataGrid ItemsSource="{Binding LoadCalcRows}" AutoGenerateColumns="False" IsReadOnly="True" CanUserAddRows="False" Margin="0,12,0,0" RowHeaderWidth="0" MinHeight="200">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="STEP (%)" Binding="{Binding LoadPct, StringFormat={}{0:0.##}}" Width="*" />
+                                <DataGridTextColumn Header="P2 (W)" Binding="{Binding OutputPowerP2, StringFormat={}{0:0.###}}" Width="*" />
+                                <DataGridTextColumn Header="ns (rpm)" Binding="{Binding SyncSpeedNs, StringFormat={}{0:0.###}}" Width="*" />
+                                <DataGridTextColumn Header="s" Binding="{Binding Slip, StringFormat={}{0:0.###}}" Width="*" />
+                                <DataGridTextColumn Header="RLL(theta_w)" Binding="{Binding RllThetaW, StringFormat={}{0:0.###}}" Width="*" />
+                                <DataGridTextColumn Header="P_Cu,s (W)" Binding="{Binding StatorCopperLoss, StringFormat={}{0:0.###}}" Width="*" />
+                                <DataGridTextColumn Header="P_Cu,r (W)" Binding="{Binding RotorCopperLoss, StringFormat={}{0:0.###}}" Width="*" />
+                            </DataGrid.Columns>
+                        </DataGrid>
+                    </StackPanel>
+                </Border>
+                <Border Margin="0,0,0,8" BorderBrush="#FFDDDDDD" BorderThickness="1" CornerRadius="6" Padding="12" Background="#FFFFFFFF">
+                    <StackPanel>
+                        <TextBlock Text="Residual/Additional Loss Table" FontWeight="SemiBold" FontSize="14" Foreground="#FF444444" />
+                        <DataGrid ItemsSource="{Binding ResidualAdditionalLossRows}" AutoGenerateColumns="False" IsReadOnly="True" CanUserAddRows="False" Margin="0,12,0,0" RowHeaderWidth="0" MinHeight="200">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="STEP (%)" Binding="{Binding LoadPct, StringFormat={}{0:0.##}}" Width="*" />
+                                <DataGridTextColumn Header="P_res (W)" Binding="{Binding ResidualLossPRes, StringFormat={}{0:0.###}}" Width="*" />
+                                <DataGridTextColumn Header="P_Lr_fit (W)" Binding="{Binding ResidualLossFitPLr, StringFormat={}{0:0.###}}" Width="*" />
+                                <DataGridTextColumn Header="P_LL (W)" Binding="{Binding AdditionalLossPll, StringFormat={}{0:0.###}}" Width="*" />
+                                <DataGridTextColumn Header="P_LL_eff (W)" Binding="{Binding AdditionalLossEffPll, StringFormat={}{0:0.###}}" Width="*" />
+                            </DataGrid.Columns>
+                        </DataGrid>
+                        <UniformGrid Columns="3" Margin="0,10,0,0">
+                            <StackPanel>
+                                <TextBlock Text="Slope A" Foreground="#FF666666" />
+                                <TextBlock Text="{Binding LldA}" FontWeight="Bold" />
+                            </StackPanel>
+                            <StackPanel>
+                                <TextBlock Text="Intercept B" Foreground="#FF666666" />
+                                <TextBlock Text="{Binding LldB}" FontWeight="Bold" />
+                            </StackPanel>
+                            <StackPanel>
+                                <TextBlock Text="gamma (Correlation)" Foreground="#FF666666" />
+                                <TextBlock Text="{Binding Correlation}" FontWeight="Bold" />
+                            </StackPanel>
+                        </UniformGrid>
+                    </StackPanel>
+                </Border>
+                <Border Margin="0,0,0,8" BorderBrush="#FFDDDDDD" BorderThickness="1" CornerRadius="6" Padding="12" Background="#FFFFFFFF">
+                    <StackPanel>
+                        <TextBlock Text="Residual/Additional Loss Scatter" FontWeight="SemiBold" FontSize="14" Foreground="#FF444444" />
+                        <syncfusion:SfChart x:Name="ResidualLossChart" Margin="0,12,0,0" Height="280">
+                            <syncfusion:SfChart.PrimaryAxis>
+                                <syncfusion:NumericalAxis Header="T^2 (Nm^2)" />
+                            </syncfusion:SfChart.PrimaryAxis>
+                            <syncfusion:SfChart.SecondaryAxis>
+                                <syncfusion:NumericalAxis Header="Loss (W)" />
+                            </syncfusion:SfChart.SecondaryAxis>
+                            <syncfusion:SfChart.Legend>
+                                <syncfusion:ChartLegend />
+                            </syncfusion:SfChart.Legend>
+                            <syncfusion:LineSeries Label="P_res" ItemsSource="{Binding ResidualScatterMeasured}" XBindingPath="TorqueSquared" YBindingPath="Loss" StrokeThickness="2" />
+                            <syncfusion:LineSeries Label="P_Lr_fit" ItemsSource="{Binding ResidualScatterFit}" XBindingPath="TorqueSquared" YBindingPath="Loss" StrokeDashArray="4" StrokeThickness="2" />
+                            <syncfusion:LineSeries Label="P_LL" ItemsSource="{Binding AdditionalLossScatter}" XBindingPath="TorqueSquared" YBindingPath="Loss" StrokeThickness="2" Stroke="DarkGray" />
+                        </syncfusion:SfChart>
+                    </StackPanel>
+                </Border>
+                <Border Margin="0,0,0,8" BorderBrush="#FFDDDDDD" BorderThickness="1" CornerRadius="6" Padding="12" Background="#FFFFFFFF">
+                    <StackPanel>
+                        <TextBlock Text="Per-Load Final Summary" FontWeight="SemiBold" FontSize="14" Foreground="#FF444444" />
+                        <DataGrid ItemsSource="{Binding FinalLoadSummaryRows}" AutoGenerateColumns="False" IsReadOnly="True" CanUserAddRows="False" Margin="0,12,0,0" RowHeaderWidth="0" MinHeight="200">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="STEP (%)" Binding="{Binding LoadPct, StringFormat={}{0:0.##}}" Width="*" />
+                                <DataGridTextColumn Header="RLL(theta_w)" Binding="{Binding RllThetaW, StringFormat={}{0:0.###}}" Width="*" />
+                                <DataGridTextColumn Header="P_Cu,s (W)" Binding="{Binding StatorCopperLoss, StringFormat={}{0:0.###}}" Width="*" />
+                                <DataGridTextColumn Header="P_Cu,r (W)" Binding="{Binding RotorCopperLoss, StringFormat={}{0:0.###}}" Width="*" />
+                                <DataGridTextColumn Header="P_res (W)" Binding="{Binding ResidualLossPRes, StringFormat={}{0:0.###}}" Width="*" />
+                                <DataGridTextColumn Header="P_LL (W)" Binding="{Binding AdditionalLossPll, StringFormat={}{0:0.###}}" Width="*" />
+                                <DataGridTextColumn Header="Friction Windage (W)" Binding="{Binding FrictionWindageLossPFw, StringFormat={}{0:0.###}}" Width="*" />
+                                <DataGridTextColumn Header="Iron Loss (W)" Binding="{Binding IronLossPFe, StringFormat={}{0:0.###}}" Width="*" />
+                                <DataGridTextColumn Header="eta_calc" Binding="{Binding Efficiency, StringFormat={}{0:P2}}" Width="*" />
+                            </DataGrid.Columns>
+                        </DataGrid>
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+        </StackPanel>
+    </ScrollViewer>
+</Window>

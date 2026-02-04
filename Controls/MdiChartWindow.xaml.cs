@@ -14,8 +14,10 @@ using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
 using System.Windows.Controls.Primitives;
+using System.Windows.Threading;
 using Microsoft.Win32;
 using System.IO;
+using System.Reflection;
 using MGK_Analyzer.Models;
 using MGK_Analyzer.Services;
 using Syncfusion.SfSkinManager;
@@ -55,9 +57,16 @@ namespace MGK_Analyzer.Controls
 		private const int MaxActiveSeriesCount = 10;
 		private const int MaxSnapshotSeriesValues = MaxActiveSeriesCount;
 		private const bool EnableCursorDebugLogging = false;
+		private const bool EnableSeriesAxisDebugLogging = true;
 		private bool _isRefreshingCursorHandles;
 		private bool _pendingSnapshotRefresh;
 		private bool _isUpdatingSeriesSelection;
+		private readonly DispatcherTimer _cursorSnapshotTimer;
+		private bool _cursorSnapshotDirty;
+		private readonly DispatcherTimer _cursorLayoutTimer;
+		private readonly DispatcherTimer _cursorResumeTimer;
+		private bool _cursorLayoutPending;
+		private bool _suspendCursorRefresh;
             private static readonly Brush[] CursorColorPalette =
             {
                 Brushes.Crimson,
@@ -66,11 +75,15 @@ namespace MGK_Analyzer.Controls
                 Brushes.Goldenrod,
                 Brushes.MediumOrchid
             };
-		private readonly Dictionary<string, NumericalAxis> _unitAxes = new(StringComparer.OrdinalIgnoreCase);
+		private readonly Dictionary<string, NumericalAxis> _seriesAxes = new(StringComparer.OrdinalIgnoreCase);
 		private NumericalAxis? _defaultSecondaryAxis;
+		private AxisAppearanceSnapshot? _defaultSecondaryAxisAppearance;
 		private Canvas? _cursorOverlay;
 		private (double min, double max)? _cachedDataValueRange;
         private HashSet<string> _initialSeriesSelection = new(StringComparer.OrdinalIgnoreCase);
+		private bool _overlayTransformDirty = true;
+		private double _overlayOffsetX;
+		private double _overlayOffsetY;
         
         // 윈도우 크기 상태 저장
         private double _normalWidth = 800;
@@ -121,7 +134,81 @@ namespace MGK_Analyzer.Controls
                     OnPropertyChanged();
                 }
             }
-        }
+		}
+
+		private static void ApplyAxisHiddenStyle(ChartAxis axis)
+		{
+			var transparent = new SolidColorBrush(Colors.Transparent);
+
+			axis.Foreground = transparent;
+
+			if (axis.LabelStyle == null)
+			{
+				axis.LabelStyle = new Syncfusion.UI.Xaml.Charts.LabelStyle();
+			}
+			axis.LabelStyle.Foreground = transparent;
+
+			if (axis.HeaderStyle == null)
+			{
+				axis.HeaderStyle = new Syncfusion.UI.Xaml.Charts.LabelStyle();
+			}
+			axis.HeaderStyle.Foreground = transparent;
+
+			var axisLineStyle = new Style(typeof(System.Windows.Shapes.Line));
+			axisLineStyle.Setters.Add(new Setter(System.Windows.Shapes.Line.StrokeProperty, transparent));
+			axisLineStyle.Setters.Add(new Setter(System.Windows.Shapes.Line.StrokeThicknessProperty, 0.0));
+			axis.AxisLineStyle = axisLineStyle;
+
+			var tickLineStyle = new Style(typeof(System.Windows.Shapes.Line));
+			tickLineStyle.Setters.Add(new Setter(System.Windows.Shapes.Line.StrokeProperty, transparent));
+			tickLineStyle.Setters.Add(new Setter(System.Windows.Shapes.Line.StrokeThicknessProperty, 0.0));
+			axis.MajorTickLineStyle = tickLineStyle;
+			axis.MinorTickLineStyle = tickLineStyle;
+		}
+
+		private static void ApplyAxisVisibleStyle(ChartAxis axis)
+		{
+			// Restore to theme defaults by clearing our overrides.
+			axis.Foreground = null;
+			if (axis.LabelStyle != null)
+			{
+				axis.LabelStyle.Foreground = null;
+			}
+			if (axis.HeaderStyle != null)
+			{
+				axis.HeaderStyle.Foreground = null;
+			}
+			axis.AxisLineStyle = null;
+			axis.MajorTickLineStyle = null;
+			axis.MinorTickLineStyle = null;
+		}
+
+		private void UpdateDefaultValueAxisVisibility()
+		{
+			if (ChartControl?.SecondaryAxis == null)
+			{
+				return;
+			}
+
+			// When any per-series axes exist, hide the default "Value" axis so
+			// it doesn't visually conflict with colored per-series axes.
+			var hasCustomAxes = _seriesAxes.Count > 0;
+			if (hasCustomAxes)
+			{
+				ApplyAxisHiddenStyle(ChartControl.SecondaryAxis);
+			}
+			else
+			{
+				if (_defaultSecondaryAxisAppearance != null)
+				{
+					_defaultSecondaryAxisAppearance.Restore(ChartControl.SecondaryAxis);
+				}
+				else
+				{
+					ApplyAxisVisibleStyle(ChartControl.SecondaryAxis);
+				}
+			}
+		}
 
         // Management panel event handlers referenced from XAML
         private void ManagementPanel_MouseLeave(object sender, System.Windows.Input.MouseEventArgs e)
@@ -337,8 +424,10 @@ namespace MGK_Analyzer.Controls
                 ChartControl.SecondaryAxis = _defaultSecondaryAxis;
             }
 
-            ChartControl.SizeChanged += (_, __) => RefreshCursorHandles();
-            ChartControl.LayoutUpdated += (_, __) => RefreshCursorHandles();
+			_defaultSecondaryAxisAppearance = AxisAppearanceSnapshot.Capture(ChartControl.SecondaryAxis);
+
+            ChartControl.SizeChanged += (_, __) => ScheduleCursorLayoutRefresh();
+            ChartControl.LayoutUpdated += (_, __) => ScheduleCursorLayoutRefresh();
             ChartControl.Loaded += (_, __) =>
             {
 				_cursorOverlay ??= FindName("CursorOverlay") as Canvas;
@@ -346,11 +435,66 @@ namespace MGK_Analyzer.Controls
             };
 			if (_cursorOverlay != null)
 			{
-				_cursorOverlay.SizeChanged += (_, __) => RefreshCursorHandles();
-				_cursorOverlay.LayoutUpdated += (_, __) => RefreshCursorHandles();
+				_cursorOverlay.SizeChanged += (_, __) => ScheduleCursorLayoutRefresh();
+				_cursorOverlay.LayoutUpdated += (_, __) => ScheduleCursorLayoutRefresh();
 			}
             Loaded += (_, __) => InitializeLeftPanelSizing();
+
+			_cursorSnapshotTimer = new DispatcherTimer
+			{
+				Interval = TimeSpan.FromMilliseconds(200)
+			};
+			_cursorSnapshotTimer.Tick += (_, __) => RefreshSnapshotsDuringDrag();
+
+			_cursorLayoutTimer = new DispatcherTimer
+			{
+				Interval = TimeSpan.FromMilliseconds(200)
+			};
+			_cursorLayoutTimer.Tick += (_, __) => ProcessCursorLayoutRefresh();
+
+			_cursorResumeTimer = new DispatcherTimer
+			{
+				Interval = TimeSpan.FromMilliseconds(200)
+			};
+			_cursorResumeTimer.Tick += (_, __) => ResumeCursorRefresh();
         }
+
+		private sealed record AxisAppearanceSnapshot(
+			Brush? Foreground,
+			SolidColorBrush? LabelForeground,
+			SolidColorBrush? HeaderForeground,
+			Style? AxisLineStyle,
+			Style? MajorTickLineStyle,
+			Style? MinorTickLineStyle)
+		{
+			public static AxisAppearanceSnapshot Capture(ChartAxis axis)
+			{
+				return new AxisAppearanceSnapshot(
+					axis.Foreground,
+					axis.LabelStyle?.Foreground,
+					axis.HeaderStyle?.Foreground,
+					axis.AxisLineStyle,
+					axis.MajorTickLineStyle,
+					axis.MinorTickLineStyle);
+			}
+
+			public void Restore(ChartAxis axis)
+			{
+				axis.Foreground = Foreground;
+				if (axis.LabelStyle != null)
+				{
+					axis.LabelStyle.Foreground = LabelForeground;
+				}
+				if (axis.HeaderStyle != null)
+				{
+					axis.HeaderStyle.Foreground = HeaderForeground;
+				}
+
+				axis.AxisLineStyle = AxisLineStyle;
+				axis.MajorTickLineStyle = MajorTickLineStyle;
+				axis.MinorTickLineStyle = MinorTickLineStyle;
+			}
+		}
 
         private void InitializeLeftPanelSizing()
         {
@@ -465,6 +609,9 @@ namespace MGK_Analyzer.Controls
                 return;
             }
 
+			var seriesBrush = ResolveSeriesSolidBrush(series);
+			LogSeriesAxisDebug($"AddSeriesToChart start: name='{series.Name}', series.Color={FormatBrush(series.Color)}, resolvedStroke={FormatBrush(seriesBrush)}");
+
             // 이미 차트에 시리즈가 있는지 확인
             if (ChartControl.Series.Any(s => (s.Tag as SeriesData)?.Name == series.Name))
             {
@@ -518,23 +665,23 @@ namespace MGK_Analyzer.Controls
             dynSeries.Tag = series;
             try
             {
-                dynSeries.YAxis = GetAxisForSeries(series);
+				var axis = GetAxisForSeries(series);
+				dynSeries.YAxis = axis;
+				LogSeriesAxisDebug($"AddSeriesToChart axis assigned: name='{series.Name}', axisHeader='{axis.Header}', axisForeground={FormatBrush(axis.Foreground)}");
             }
             catch
             {
                 // Some series types may not expose a YAxis property; ignore in that case.
             }
 
-			if (chartSeries is FastLineBitmapSeries fastBitmapSeries)
-			{
-				fastBitmapSeries.Stroke = series.Color;
-			}
-			else if (chartSeries is StepLineSeries stepLineSeries)
-			{
-				stepLineSeries.Stroke = series.Color;
-			}
+			ApplySeriesBrush(chartSeries, seriesBrush);
 
             ChartControl.Series.Add(chartSeries);
+			ApplySeriesBrush(chartSeries, seriesBrush);
+			DumpChartSeriesBrushes(chartSeries, series);
+			LogSeriesAxisDebug($"AddSeriesToChart done: name='{series.Name}', chartSeriesType='{chartSeries.GetType().Name}', seriesCount={ChartControl.Series.Count}");
+			UpdateDefaultValueAxisVisibility();
+			DumpAxesDebug($"after AddSeriesToChart '{series.Name}'");
             RefreshAllSnapshots();
         }
 
@@ -626,10 +773,30 @@ namespace MGK_Analyzer.Controls
                 s.Label?.ToString() == series.Name);
             if (seriesToRemove != null)
             {
+				LogSeriesAxisDebug($"RemoveSeriesFromChart: name='{series.Name}', seriesCountBefore={ChartControl.Series.Count}");
                 ChartControl.Series.Remove(seriesToRemove);
+				RemoveAxisForSeries(series);
                 RefreshAllSnapshots();
+				LogSeriesAxisDebug($"RemoveSeriesFromChart done: name='{series.Name}', seriesCountAfter={ChartControl.Series.Count}");
+				UpdateDefaultValueAxisVisibility();
+				DumpAxesDebug($"after RemoveSeriesFromChart '{series.Name}'");
             }
         }
+
+		private void RemoveAxisForSeries(SeriesData series)
+		{
+			if (ChartControl == null || series == null)
+			{
+				return;
+			}
+
+			var key = string.IsNullOrWhiteSpace(series.Name) ? "<unknown>" : series.Name.Trim();
+			if (_seriesAxes.TryGetValue(key, out var axis))
+			{
+				ChartControl.Axes.Remove(axis);
+				_seriesAxes.Remove(key);
+			}
+		}
 
 		private void RebuildDataValueRangeCache()
 		{
@@ -680,6 +847,72 @@ namespace MGK_Analyzer.Controls
 			}
 
 			_cachedDataValueRange = (min, max);
+		}
+
+		private NumericalAxis CreateAxisForSeries(SeriesData series)
+		{
+			var header = string.IsNullOrWhiteSpace(series.Unit)
+				? series.Name
+				: $"{series.Name} ({series.Unit})";
+
+			var brush = ResolveSeriesSolidBrush(series);
+			LogSeriesAxisDebug($"CreateAxisForSeries: name='{series.Name}', unit='{series.Unit}', series.Color={FormatBrush(series.Color)}, resolved={FormatBrush(brush)}");
+			var axisLineStyle = new Style(typeof(System.Windows.Shapes.Line));
+			axisLineStyle.Setters.Add(new Setter(System.Windows.Shapes.Line.StrokeProperty, brush));
+			axisLineStyle.Setters.Add(new Setter(System.Windows.Shapes.Line.StrokeThicknessProperty, 1.5));
+
+			var tickLineStyle = new Style(typeof(System.Windows.Shapes.Line));
+			tickLineStyle.Setters.Add(new Setter(System.Windows.Shapes.Line.StrokeProperty, brush));
+			tickLineStyle.Setters.Add(new Setter(System.Windows.Shapes.Line.StrokeThicknessProperty, 1.0));
+
+			var labelStyle = new Syncfusion.UI.Xaml.Charts.LabelStyle
+			{
+				Foreground = brush
+			};
+
+			var headerStyle = new Syncfusion.UI.Xaml.Charts.LabelStyle
+			{
+				Foreground = brush
+			};
+
+			var axis = new NumericalAxis
+			{
+				Header = header,
+				OpposedPosition = false,
+				ShowGridLines = false,
+				Foreground = brush,
+				LabelStyle = labelStyle,
+				HeaderStyle = headerStyle,
+				AxisLineStyle = axisLineStyle,
+				MajorTickLineStyle = tickLineStyle,
+				MinorTickLineStyle = tickLineStyle
+			};
+
+			var labelForeground = axis.LabelStyle?.Foreground;
+			var headerForeground = axis.HeaderStyle?.Foreground;
+			LogSeriesAxisDebug($"CreateAxisForSeries result: header='{axis.Header}', foreground={FormatBrush(axis.Foreground)}, labelFg={FormatBrush(labelForeground)}, headerFg={FormatBrush(headerForeground)}");
+
+			return axis;
+		}
+
+		private static SolidColorBrush ResolveSeriesSolidBrush(SeriesData? series)
+		{
+			if (series == null)
+			{
+				return new SolidColorBrush(Colors.Black);
+			}
+
+			if (series.Color is SolidColorBrush solid)
+			{
+				return solid;
+			}
+
+			if (series.Color is GradientBrush gradient && gradient.GradientStops != null && gradient.GradientStops.Count > 0)
+			{
+				return new SolidColorBrush(gradient.GradientStops[0].Color);
+			}
+
+			return new SolidColorBrush(Colors.Black);
 		}
 
 		private async void RebuildDataTableViewAsync()
@@ -951,26 +1184,18 @@ namespace MGK_Analyzer.Controls
                 return _defaultSecondaryAxis ?? (NumericalAxis)(ChartControl.SecondaryAxis ?? new NumericalAxis { Header = "Value" });
             }
 
-            var unitKey = string.IsNullOrWhiteSpace(series.Unit) ? "Default" : series.Unit.Trim();
-            if (unitKey.Equals("Default", StringComparison.OrdinalIgnoreCase) || string.IsNullOrWhiteSpace(series.Unit))
-            {
-                return _defaultSecondaryAxis ?? (NumericalAxis)(ChartControl.SecondaryAxis ?? new NumericalAxis { Header = "Value" });
-            }
+			var key = string.IsNullOrWhiteSpace(series.Name) ? "<unknown>" : series.Name.Trim();
+			if (_seriesAxes.TryGetValue(key, out var existingAxis))
+			{
+				LogSeriesAxisDebug($"GetAxisForSeries reuse: key='{key}', axisHeader='{existingAxis.Header}', axisForeground={FormatBrush(existingAxis.Foreground)}");
+				return existingAxis;
+			}
 
-            if (_unitAxes.TryGetValue(unitKey, out var existingAxis))
-            {
-                return existingAxis;
-            }
-
-            var axis = new NumericalAxis
-            {
-                Header = series.Unit,
-                OpposedPosition = true,
-                ShowGridLines = false
-            };
-            ChartControl.Axes.Add(axis);
-            _unitAxes[unitKey] = axis;
-            return axis;
+			var axis = CreateAxisForSeries(series);
+			ChartControl.Axes.Add(axis);
+			_seriesAxes[key] = axis;
+			LogSeriesAxisDebug($"GetAxisForSeries add: key='{key}', axisHeader='{axis.Header}', axisForeground={FormatBrush(axis.Foreground)}, axesCount={ChartControl.Axes.Count}, cachedKeys=[{string.Join(",", _seriesAxes.Keys)}]");
+			return axis;
         }
 
         private int GetNextCursorIndex()
@@ -1166,6 +1391,7 @@ namespace MGK_Analyzer.Controls
 
 			handle.Index = targetIndex;
 			UpdateCursorAnnotation(handle);
+			MarkCursorSnapshotDirty();
 
 			var secondsOffset = axisValue;
 			var interval = Math.Max(DataSet.TimeInterval, 0.001f);
@@ -1189,6 +1415,7 @@ namespace MGK_Analyzer.Controls
 
 			var wasDragging = handle.IsDragging;
 			handle.IsDragging = false;
+			StopCursorSnapshotTimer();
 			LogCursorDebug($"Annotation drag completed for cursor index={handle.Index:F2}");
 			UpdateCursorAnnotation(handle);
 			if (wasDragging || _pendingSnapshotRefresh)
@@ -1205,6 +1432,7 @@ namespace MGK_Analyzer.Controls
 			}
 
 			handle.IsDragging = true;
+			StartCursorSnapshotTimer();
 			var pointer = ChartControl != null ? e.GetPosition(ChartControl) : new Point(double.NaN, double.NaN);
 			var axisValue = annotation.X1 is DateTime dt ? dt.ToString("HH:mm:ss.fff", CultureInfo.InvariantCulture) : annotation.X1?.ToString() ?? "<null>";
 			LogCursorDebug($"Annotation mouse down -> cursorIndex={handle.Index:F2}, pointer=({pointer.X:F2},{pointer.Y:F2}), axis={axisValue}");
@@ -1219,6 +1447,7 @@ namespace MGK_Analyzer.Controls
 
 			var wasDragging = handle.IsDragging;
 			handle.IsDragging = false;
+			StopCursorSnapshotTimer();
 			var pointer = ChartControl != null ? e.GetPosition(ChartControl) : new Point(double.NaN, double.NaN);
 			var axisValue = annotation.X1 is DateTime dt ? dt.ToString("HH:mm:ss.fff", CultureInfo.InvariantCulture) : annotation.X1?.ToString() ?? "<null>";
 			LogCursorDebug($"Annotation mouse up -> cursorIndex={handle.Index:F2}, pointer=({pointer.X:F2},{pointer.Y:F2}), axis={axisValue}");
@@ -1271,7 +1500,7 @@ namespace MGK_Analyzer.Controls
 				return;
 			}
 
-			if (_isRefreshingCursorHandles || HasActiveCursorDrag())
+			if (_isRefreshingCursorHandles || HasActiveCursorDrag() || _suspendCursorRefresh)
 			{
 				return;
 			}
@@ -1288,6 +1517,63 @@ namespace MGK_Analyzer.Controls
 			{
 				_isRefreshingCursorHandles = false;
 			}
+		}
+
+		private void ScheduleCursorLayoutRefresh()
+		{
+			if (_cursorHandles.Count == 0)
+			{
+				return;
+			}
+
+			_overlayTransformDirty = true;
+			_cursorLayoutPending = true;
+			if (!_cursorLayoutTimer.IsEnabled)
+			{
+				_cursorLayoutTimer.Start();
+			}
+		}
+
+		private void ProcessCursorLayoutRefresh()
+		{
+			if (!_cursorLayoutPending)
+			{
+				_cursorLayoutTimer.Stop();
+				return;
+			}
+
+			if (_suspendCursorRefresh || HasActiveCursorDrag())
+			{
+				return;
+			}
+
+			_cursorLayoutPending = false;
+			_cursorLayoutTimer.Stop();
+			RefreshCursorHandles();
+		}
+
+		private void SuspendCursorRefresh()
+		{
+			_suspendCursorRefresh = true;
+			_cursorResumeTimer.Stop();
+			_cursorResumeTimer.Start();
+		}
+
+		private void ResumeCursorRefresh()
+		{
+			_cursorResumeTimer.Stop();
+			_suspendCursorRefresh = false;
+			ScheduleCursorLayoutRefresh();
+		}
+
+		private void LeftPanelTabs_SelectionChanged(object sender, SelectionChangedEventArgs e)
+		{
+			SuspendCursorRefresh();
+		}
+
+		private void ManagementPanelTabs_SelectionChanged(object sender, SelectionChangedEventArgs e)
+		{
+			SuspendCursorRefresh();
 		}
 
         private void RefreshSnapshotOrdering()
@@ -1327,9 +1613,29 @@ namespace MGK_Analyzer.Controls
 			}
 		}
 
-		private void UpdateSnapshotForHandle(ChartCursorHandle handle)
+		private void RefreshSnapshotsDuringDrag()
+		{
+			if (_cursorHandles.Count == 0 || DataSet == null)
+			{
+				StopCursorSnapshotTimer();
+				return;
+			}
+
+			if (!_cursorSnapshotDirty)
+			{
+				return;
+			}
+
+			_cursorSnapshotDirty = false;
+			foreach (var handle in _cursorHandles)
+			{
+				UpdateSnapshotForHandle(handle, allowWhileDragging: true);
+			}
+		}
+
+		private void UpdateSnapshotForHandle(ChartCursorHandle handle, bool allowWhileDragging = false)
         {
-			if (DataSet == null || handle.Snapshot == null || handle.IsDragging)
+			if (DataSet == null || handle.Snapshot == null || (handle.IsDragging && !allowWhileDragging))
             {
                 return;
             }
@@ -1341,6 +1647,29 @@ namespace MGK_Analyzer.Controls
             var activeSeries = GetActiveSeriesData().ToList();
             UpdateSnapshotSeriesValues(handle.Snapshot, activeSeries, sampleIndex);
         }
+
+		private void StartCursorSnapshotTimer()
+		{
+			if (!_cursorSnapshotTimer.IsEnabled)
+			{
+				_cursorSnapshotTimer.Start();
+			}
+		}
+
+		private void StopCursorSnapshotTimer()
+		{
+			if (_cursorSnapshotTimer.IsEnabled)
+			{
+				_cursorSnapshotTimer.Stop();
+			}
+			_cursorSnapshotDirty = false;
+		}
+
+		private void MarkCursorSnapshotDirty()
+		{
+			_cursorSnapshotDirty = true;
+			StartCursorSnapshotTimer();
+		}
 
 		private void UpdateSnapshotSeriesValues(CursorSnapshotViewModel snapshot, List<SeriesData> activeSeries, int sampleIndex)
         {
@@ -1489,6 +1818,179 @@ namespace MGK_Analyzer.Controls
             Console.WriteLine($"[CursorDebug] {message}");
         }
 
+		private static string FormatBrush(Brush? brush)
+		{
+			if (brush == null)
+			{
+				return "<null>";
+			}
+
+			if (brush is SolidColorBrush solid)
+			{
+				return $"Solid #{solid.Color.A:X2}{solid.Color.R:X2}{solid.Color.G:X2}{solid.Color.B:X2}";
+			}
+
+			if (brush is GradientBrush gradient && gradient.GradientStops != null && gradient.GradientStops.Count > 0)
+			{
+				var c = gradient.GradientStops[0].Color;
+				return $"{brush.GetType().Name} firstStop=#{c.A:X2}{c.R:X2}{c.G:X2}{c.B:X2}";
+			}
+
+			return brush.GetType().Name;
+		}
+
+		private void LogSeriesAxisDebug(string message)
+		{
+			if (!EnableSeriesAxisDebugLogging)
+			{
+				return;
+			}
+
+			PerformanceLogger.Instance.LogInfo(message, "SeriesAxis_Debug");
+			Console.WriteLine($"[SeriesAxisDebug] {message}");
+		}
+
+		private void DumpChartSeriesBrushes(ChartSeries chartSeries, SeriesData seriesData)
+		{
+			if (!EnableSeriesAxisDebugLogging)
+			{
+				return;
+			}
+
+			if (chartSeries == null)
+			{
+				return;
+			}
+
+			static object? TryGetPropertyValue(object target, string propertyName)
+			{
+				try
+				{
+					var prop = target.GetType().GetProperty(propertyName, BindingFlags.Instance | BindingFlags.Public);
+					return prop?.GetValue(target);
+				}
+				catch
+				{
+					return null;
+				}
+			}
+
+			var candidates = new[]
+			{
+				"Stroke",
+				"Fill",
+				"Interior",
+				"SegmentColorPath",
+				"LegendIcon",
+				"LegendIconTemplate",
+				"Brush",
+				"Foreground",
+				"Background"
+			};
+
+			var parts = new List<string>();
+			foreach (var name in candidates)
+			{
+				var value = TryGetPropertyValue(chartSeries, name);
+				if (value is Brush brush)
+				{
+					parts.Add($"{name}={FormatBrush(brush)}");
+				}
+				else if (value != null)
+				{
+					// keep non-brush values concise
+					parts.Add($"{name}={value.GetType().Name}");
+				}
+			}
+
+			LogSeriesAxisDebug($"SeriesBrushDump: series='{seriesData?.Name}', type='{chartSeries.GetType().Name}', label='{chartSeries.Label}', tagSeries='{(chartSeries.Tag as SeriesData)?.Name}' | {string.Join(", ", parts)}");
+		}
+
+		private void ApplySeriesBrush(ChartSeries chartSeries, SolidColorBrush brush)
+		{
+			if (chartSeries == null)
+			{
+				return;
+			}
+
+			// Explicitly set the known stroke properties.
+			if (chartSeries is FastLineBitmapSeries fastBitmapSeries)
+			{
+				fastBitmapSeries.Stroke = brush;
+			}
+			else if (chartSeries is StepLineSeries stepLineSeries)
+			{
+				stepLineSeries.Stroke = brush;
+			}
+
+			// Some themes/palettes may use other brush properties. Best-effort set via reflection.
+			foreach (var propertyName in new[] { "Stroke", "Fill", "Interior", "Brush", "Foreground" })
+			{
+				try
+				{
+					var prop = chartSeries.GetType().GetProperty(propertyName, BindingFlags.Instance | BindingFlags.Public);
+					if (prop == null || !prop.CanWrite)
+					{
+						continue;
+					}
+
+					if (!typeof(Brush).IsAssignableFrom(prop.PropertyType))
+					{
+						continue;
+					}
+
+					prop.SetValue(chartSeries, brush);
+				}
+				catch
+				{
+					// ignore: not all series expose all properties
+				}
+			}
+		}
+
+		private void DumpAxesDebug(string reason)
+		{
+			if (!EnableSeriesAxisDebugLogging)
+			{
+				return;
+			}
+
+			if (ChartControl == null)
+			{
+				LogSeriesAxisDebug($"AxesDump({reason}): ChartControl=<null>");
+				return;
+			}
+
+			var axes = ChartControl.Axes;
+			var count = axes?.Count ?? 0;
+			LogSeriesAxisDebug($"AxesDump({reason}): axesCount={count}, primary='{ChartControl.PrimaryAxis?.Header}', secondary='{ChartControl.SecondaryAxis?.Header}'");
+
+			if (axes == null)
+			{
+				return;
+			}
+
+			for (int i = 0; i < axes.Count; i++)
+			{
+				var axis = axes[i] as ChartAxis;
+				if (axis == null)
+				{
+					LogSeriesAxisDebug($"AxesDump[{i}]: <non-ChartAxis> type='{axes[i]?.GetType().Name}'");
+					continue;
+				}
+
+				var header = axis.Header?.ToString() ?? string.Empty;
+				Brush? fg = null;
+				Brush? labelFg = null;
+				Brush? headerFg = null;
+				try { fg = axis.Foreground; } catch { }
+				try { labelFg = axis.LabelStyle?.Foreground; } catch { }
+				try { headerFg = axis.HeaderStyle?.Foreground; } catch { }
+
+				LogSeriesAxisDebug($"AxesDump[{i}]: type='{axis.GetType().Name}', header='{header}', fg={FormatBrush(fg)}, labelFg={FormatBrush(labelFg)}, headerFg={FormatBrush(headerFg)}, opposed={axis.OpposedPosition}");
+			}
+		}
+
         private void ClearCursorHandles()
         {
 			if (ChartControl != null)
@@ -1503,6 +2005,13 @@ namespace MGK_Analyzer.Controls
 						ChartControl.Annotations?.Remove(handle.Annotation);
 					}
 				}
+
+				foreach (var axis in _seriesAxes.Values)
+				{
+					ChartControl.Axes.Remove(axis);
+				}
+				_seriesAxes.Clear();
+				UpdateDefaultValueAxisVisibility();
 			}
 
             _cursorHandles.Clear();
@@ -1644,7 +2153,13 @@ namespace MGK_Analyzer.Controls
 				return;
 			}
 
-			var chartToOverlay = ChartControl.TranslatePoint(new Point(plotX.Value, 0), _cursorOverlay).X;
+			if (!EnsureOverlayTransformCache())
+			{
+				line.Visibility = Visibility.Collapsed;
+				return;
+			}
+
+			var chartToOverlay = plotX.Value + _overlayOffsetX;
 			if (double.IsNaN(chartToOverlay) || double.IsInfinity(chartToOverlay))
 			{
 				line.Visibility = Visibility.Collapsed;
@@ -1669,7 +2184,6 @@ namespace MGK_Analyzer.Controls
 			line.Y1 = 0;
 			line.Y2 = Math.Max(0, height);
 
-			// Visible rounded ends: caps are often clipped on a full-height vertical line.
 			if (handle.OverlayTopCap == null || handle.OverlayBottomCap == null)
 			{
 				var caps = CreateCursorOverlayCaps(handle.CursorBrush);
@@ -1691,6 +2205,32 @@ namespace MGK_Analyzer.Controls
 				Canvas.SetTop(handle.OverlayTopCap, 0 - capSize / 2);
 				Canvas.SetLeft(handle.OverlayBottomCap, chartToOverlay - capSize / 2);
 				Canvas.SetTop(handle.OverlayBottomCap, Math.Max(0, height) - capSize / 2);
+			}
+		}
+
+		private bool EnsureOverlayTransformCache()
+		{
+			if (ChartControl == null || _cursorOverlay == null)
+			{
+				return false;
+			}
+
+			if (!_overlayTransformDirty)
+			{
+				return true;
+			}
+
+			try
+			{
+				var origin = ChartControl.TranslatePoint(new Point(0, 0), _cursorOverlay);
+				_overlayOffsetX = origin.X;
+				_overlayOffsetY = origin.Y;
+				_overlayTransformDirty = false;
+				return true;
+			}
+			catch
+			{
+				return false;
 			}
 		}
 
