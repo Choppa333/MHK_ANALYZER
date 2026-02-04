@@ -140,13 +140,18 @@ namespace MGK_Analyzer.Services
 
                     PerformanceLogger.Instance.LogInfo($"헤더 및 메타 파싱 완료 - 컬럼 수: {headers.Length}", "CSV_Loading");
 
+                    if (meta.TryGetValue("TYPE", out var metaTypeVal) && int.TryParse(metaTypeVal.Trim(), out var parsedMetaType))
+                    {
+                        dataSet.MetaType = parsedMetaType;
+                    }
+
                     if (expectedMetaType.HasValue)
                     {
-                        if (meta.TryGetValue("TYPE", out var typeVal))
+                        if (meta.TryGetValue("TYPE", out var expectedTypeText))
                         {
-                            if (!int.TryParse(typeVal.Trim(), out var parsedType) || parsedType != expectedMetaType.Value)
+                            if (!int.TryParse(expectedTypeText.Trim(), out var parsedType) || parsedType != expectedMetaType.Value)
                             {
-                                var errorMessage = $"CSV META TYPE 불일치: {typeVal} (expected {expectedMetaType.Value})";
+                                var errorMessage = $"CSV META TYPE 불일치: {expectedTypeText} (expected {expectedMetaType.Value})";
                                 PerformanceLogger.Instance.LogError(errorMessage, "CSV_Loading");
                                 throw new InvalidDataException(errorMessage);
                             }
@@ -166,6 +171,7 @@ namespace MGK_Analyzer.Services
                     // DATE 메타가 있으면 기본 시간으로 설정
                     if (meta.TryGetValue("DATE", out var dateVal) && !string.IsNullOrWhiteSpace(dateVal))
                     {
+                        dataSet.MetaDateRaw = dateVal.Trim();
                         if (DateTime.TryParse(dateVal, out var parsedDate))
                         {
                             dataSet.BaseTime = parsedDate;

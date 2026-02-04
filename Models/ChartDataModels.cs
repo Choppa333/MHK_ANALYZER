@@ -41,6 +41,10 @@ namespace MGK_Analyzer.Models
             set { _totalSamples = value; OnPropertyChanged(); }
         }
 
+        public int? MetaType { get; set; }
+
+        public string? MetaDateRaw { get; set; }
+
         public Dictionary<string, SeriesData> SeriesData { get; set; } = new Dictionary<string, SeriesData>();
 
         // 안전한 시간 계산 (overflow 방지)

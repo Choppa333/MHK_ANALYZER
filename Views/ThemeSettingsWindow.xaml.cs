@@ -134,10 +134,8 @@ namespace MGK_Analyzer.Views
         {
             return theme switch
             {
-                ThemeManager.ThemeType.Default => "Uses Windows default theme.",
                 ThemeManager.ThemeType.MaterialLight => "Google Material Design light theme.",
                 ThemeManager.ThemeType.MaterialDark => "Google Material Design dark theme.",
-                ThemeManager.ThemeType.FluentLight => "Microsoft Fluent Design light theme.",
                 _ => "No description available."
             };
         }

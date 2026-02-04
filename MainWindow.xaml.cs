@@ -98,6 +98,16 @@ namespace MGK_Analyzer
             }
         }
 
+        private void SetChartLoadingOverlay(bool isVisible)
+        {
+            if (ChartLoadingOverlay == null)
+            {
+                return;
+            }
+
+            ChartLoadingOverlay.Visibility = isVisible ? Visibility.Visible : Visibility.Collapsed;
+        }
+
         #region 기존 메뉴 이벤트 핸들러
 
         private void NewFile_Click(object sender, RoutedEventArgs e)
@@ -176,49 +186,125 @@ namespace MGK_Analyzer
             }
         }
 
-        private async Task LoadCsvAndDisplayChartAsync(
+        private async void ChartView_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                if (_mdiWindowManager == null)
+                {
+                    UpdateStatusBar("MDI 초기화가 완료되지 않았습니다.");
+                    return;
+                }
+
+                var openFileDialog = new OpenFileDialog
+                {
+                    Title = "Select CSV File",
+                    Filter = "CSV files (*.csv)|*.csv|All files (*.*)|*.*",
+                    CheckFileExists = true,
+                    CheckPathExists = true
+                };
+
+                if (openFileDialog.ShowDialog() == true)
+                {
+                    var supportedTypes = new Dictionary<int, string>
+                    {
+                        { 0, "Rated Test" },
+                        { 1, "Load Test" },
+                        { 2, "No-Load Test" }
+                    };
+
+                    SetChartLoadingOverlay(true);
+                    try
+                    {
+                        await LoadCsvAndDisplayChartAsync(
+                            openFileDialog.FileName,
+                            "Chart View",
+                            expectedMetaType: null,
+                            requireMetaTypeMatch: false,
+                            windowType: ChartWindowType.Standard,
+                            supportedMetaTypes: supportedTypes,
+                            unsupportedMessageTitle: "Chart View");
+                    }
+                    finally
+                    {
+                        SetChartLoadingOverlay(false);
+                    }
+                }
+                else
+                {
+                    UpdateStatusBar("CSV file selection was canceled.");
+                }
+            }
+            catch (Exception ex)
+            {
+                PerformanceLogger.Instance.LogError($"Chart view failed: {ex.Message}", "Data_Import");
+                MessageBox.Show("Unsupported data format.", "Chart View", MessageBoxButton.OK, MessageBoxImage.Warning);
+                UpdateStatusBar("Unsupported data format.");
+            }
+        }
+
+        private async Task<MemoryOptimizedDataSet?> LoadCsvAndDisplayChartAsync(
             string filePath,
             string actionTitle,
             int? expectedMetaType = 0,
             bool requireMetaTypeMatch = false,
-            ChartWindowType windowType = ChartWindowType.Standard)
+            ChartWindowType windowType = ChartWindowType.Standard,
+            IReadOnlyDictionary<int, string>? supportedMetaTypes = null,
+            string? unsupportedMessageTitle = null)
         {
             if (_mdiWindowManager == null)
             {
                 UpdateStatusBar("MDI 초기화가 완료되지 않았습니다.");
-                return;
+                return null;
             }
 
+            var useEnglishMessages = supportedMetaTypes != null;
             using var overallTimer = PerformanceLogger.Instance.StartTimer($"{actionTitle}: {System.IO.Path.GetFileName(filePath)}", "Data_Import");
             var fileInfo = new FileInfo(filePath);
             var fileSizeMB = fileInfo.Length / (1024.0 * 1024.0);
 
-            UpdateStatusBar($"{actionTitle} 파일을 로딩하고 있습니다... (크기: {fileSizeMB:F1}MB)");
+            UpdateStatusBar(useEnglishMessages
+                ? $"Loading {actionTitle}... (Size: {fileSizeMB:F1} MB)"
+                : $"{actionTitle} 파일을 로딩하고 있습니다... (크기: {fileSizeMB:F1}MB)");
             WelcomeMessage.Visibility = Visibility.Collapsed;
 
             if (fileSizeMB > 10)
             {
                 var result = MessageBox.Show(
-                    $"큰 파일입니다 (크기: {fileSizeMB:F1}MB).\n" +
-                    "로딩에 시간이 걸릴 수 있습니다.\n\n" +
-                    "계속 진행하시겠습니까?",
-                    "대용량 파일 경고",
+                    useEnglishMessages
+                        ? $"Large file detected (Size: {fileSizeMB:F1} MB).\n" +
+                          "Loading may take some time.\n\n" +
+                          "Do you want to continue?"
+                        : $"큰 파일입니다 (크기: {fileSizeMB:F1}MB).\n" +
+                          "로딩에 시간이 걸릴 수 있습니다.\n\n" +
+                          "계속 진행하시겠습니까?",
+                    useEnglishMessages ? "Large File Warning" : "대용량 파일 경고",
                     MessageBoxButton.YesNo,
                     MessageBoxImage.Question);
 
                 if (result == MessageBoxResult.No)
                 {
                     PerformanceLogger.Instance.LogInfo("사용자가 대용량 파일 로딩을 취소했습니다", "Data_Import");
-                    UpdateStatusBar("파일 로딩이 취소되었습니다.");
-                    return;
+                    UpdateStatusBar(useEnglishMessages ? "File loading was canceled." : "파일 로딩이 취소되었습니다.");
+                    return null;
                 }
             }
 
             var progress = new Progress<int>(percent =>
             {
-                var statusMessage = fileSizeMB > 5
-                    ? $"CSV 파일 로딩 중... {percent}% (크기: {fileSizeMB:F1}MB - 잠시만 기다려주세요)"
-                    : $"CSV 파일 로딩 중... {percent}%";
+                string statusMessage;
+                if (useEnglishMessages)
+                {
+                    statusMessage = fileSizeMB > 5
+                        ? $"Loading CSV... {percent}% (Size: {fileSizeMB:F1} MB - please wait)"
+                        : $"Loading CSV... {percent}%";
+                }
+                else
+                {
+                    statusMessage = fileSizeMB > 5
+                        ? $"CSV 파일 로딩 중... {percent}% (크기: {fileSizeMB:F1}MB - 잠시만 기다려주세요)"
+                        : $"CSV 파일 로딩 중... {percent}%";
+                }
                 UpdateStatusBar(statusMessage);
             });
 
@@ -230,22 +316,53 @@ namespace MGK_Analyzer
                     dataSet = await _csvLoader.LoadCsvDataAsync(filePath, progress, expectedMetaType, requireMetaTypeMatch);
                 }
 
+                if (supportedMetaTypes != null)
+                {
+                    if (!dataSet.MetaType.HasValue || !supportedMetaTypes.ContainsKey(dataSet.MetaType.Value))
+                    {
+                        MessageBox.Show("Unsupported data format.", unsupportedMessageTitle ?? "Chart View", MessageBoxButton.OK, MessageBoxImage.Warning);
+                        UpdateStatusBar("Unsupported data format.");
+                        return null;
+                    }
+                }
+
                 CreateChartWindowFromDataSet(dataSet, windowType);
 
-                var loadMessage = fileSizeMB > 5
-                    ? $"'{dataSet.FileName}' 파일이 성공적으로 로드되었습니다. (크기: {fileSizeMB:F1}MB, 데이터: {dataSet.TotalSamples:N0}개, 시리즈: {dataSet.SeriesData.Count}개) - 다운샘플링 적용됨"
-                    : $"'{dataSet.FileName}' 파일이 성공적으로 로드되었습니다. (데이터: {dataSet.TotalSamples:N0}개, 시리즈: {dataSet.SeriesData.Count}개)";
+                string loadMessage;
+                if (useEnglishMessages)
+                {
+                    loadMessage = fileSizeMB > 5
+                        ? $"'{dataSet.FileName}' loaded successfully. (Size: {fileSizeMB:F1} MB, Samples: {dataSet.TotalSamples:N0}, Series: {dataSet.SeriesData.Count}) - downsampling applied"
+                        : $"'{dataSet.FileName}' loaded successfully. (Samples: {dataSet.TotalSamples:N0}, Series: {dataSet.SeriesData.Count})";
+                }
+                else
+                {
+                    loadMessage = fileSizeMB > 5
+                        ? $"'{dataSet.FileName}' 파일이 성공적으로 로드되었습니다. (크기: {fileSizeMB:F1}MB, 데이터: {dataSet.TotalSamples:N0}개, 시리즈: {dataSet.SeriesData.Count}개) - 다운샘플링 적용됨"
+                        : $"'{dataSet.FileName}' 파일이 성공적으로 로드되었습니다. (데이터: {dataSet.TotalSamples:N0}개, 시리즈: {dataSet.SeriesData.Count}개)";
+                }
 
                 UpdateStatusBar(loadMessage);
                 PerformanceLogger.Instance.LogInfo($"{actionTitle} 완료: {dataSet.FileName}", "Data_Import");
                 UpdateWindowCount();
+                return dataSet;
             }
             catch (Exception ex)
             {
-                PerformanceLogger.Instance.LogError($"데이터 가져오기 실패: {ex.Message}", "Data_Import");
-                MessageBox.Show($"CSV 파일 로딩 중 오류가 발생했습니다:\n\n{ex.Message}",
-                    "오류", MessageBoxButton.OK, MessageBoxImage.Error);
-                UpdateStatusBar("CSV 파일 로딩 실패");
+                if (supportedMetaTypes != null)
+                {
+                    PerformanceLogger.Instance.LogError($"Unsupported data format: {ex.Message}", "Data_Import");
+                    MessageBox.Show("Unsupported data format.", unsupportedMessageTitle ?? "Chart View", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    UpdateStatusBar("Unsupported data format.");
+                }
+                else
+                {
+                    PerformanceLogger.Instance.LogError($"데이터 가져오기 실패: {ex.Message}", "Data_Import");
+                    MessageBox.Show($"CSV 파일 로딩 중 오류가 발생했습니다:\n\n{ex.Message}",
+                        "오류", MessageBoxButton.OK, MessageBoxImage.Error);
+                    UpdateStatusBar("CSV 파일 로딩 실패");
+                }
+                return null;
             }
         }
 

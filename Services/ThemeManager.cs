@@ -11,9 +11,7 @@ namespace MGK_Analyzer.Services
         public enum ThemeType
         {
             MaterialLight,
-            MaterialDark,
-            FluentLight,
-            Default
+            MaterialDark
         }
 
         private static ThemeManager? _instance;
@@ -28,7 +26,7 @@ namespace MGK_Analyzer.Services
         private ThemeManager()
         {
             _settings = AppSettings.Load();
-            _currentTheme = _settings.SelectedTheme;
+            _currentTheme = NormalizeTheme(_settings.SelectedTheme);
             _originalTheme = _currentTheme;
         }
 
@@ -48,8 +46,9 @@ namespace MGK_Analyzer.Services
         public void InitializeTheme()
         {
             // 앱 시작 시 저장된 테마 적용
-            ApplyThemeInternal(_settings.SelectedTheme);
-            _originalTheme = _settings.SelectedTheme;
+            var normalizedTheme = NormalizeTheme(_settings.SelectedTheme);
+            ApplyThemeInternal(normalizedTheme);
+            _originalTheme = normalizedTheme;
         }
 
         public void PreviewTheme(ThemeType theme)
@@ -61,10 +60,11 @@ namespace MGK_Analyzer.Services
         public void ApplyTheme(ThemeType theme)
         {
             // 실제 테마 적용 및 저장
-            ApplyThemeInternal(theme);
-            _settings.SelectedTheme = theme;
+            var normalizedTheme = NormalizeTheme(theme);
+            ApplyThemeInternal(normalizedTheme);
+            _settings.SelectedTheme = normalizedTheme;
             _settings.Save();
-            _originalTheme = theme;
+            _originalTheme = normalizedTheme;
         }
 
         public void CancelThemeChange()
@@ -77,25 +77,15 @@ namespace MGK_Analyzer.Services
         {
             try
             {
-                if (Application.Current?.MainWindow == null)
+                if (Application.Current == null)
                     return;
 
-                switch (theme)
+                var themeName = theme == ThemeType.MaterialDark ? "MaterialDark" : "MaterialLight";
+                var syncfusionTheme = new Theme(themeName);
+
+                foreach (Window window in Application.Current.Windows)
                 {
-                    case ThemeType.MaterialLight:
-                        SfSkinManager.SetTheme(Application.Current.MainWindow, new Theme("MaterialLight"));
-                        break;
-                    case ThemeType.MaterialDark:
-                        SfSkinManager.SetTheme(Application.Current.MainWindow, new Theme("MaterialDark"));
-                        break;
-                    case ThemeType.FluentLight:
-                        SfSkinManager.SetTheme(Application.Current.MainWindow, new Theme("FluentLight"));
-                        break;
-                    case ThemeType.Default:
-                    default:
-                        // 테마 제거 (기본 테마로)
-                        SfSkinManager.SetTheme(Application.Current.MainWindow, new Theme("Default"));
-                        break;
+                    SfSkinManager.SetTheme(window, syncfusionTheme);
                 }
 
                 CurrentTheme = theme;
@@ -113,9 +103,7 @@ namespace MGK_Analyzer.Services
             {
                 ThemeType.MaterialLight => "Material Light",
                 ThemeType.MaterialDark => "Material Dark",
-                ThemeType.FluentLight => "Fluent Light",
-                ThemeType.Default => "기본 테마",
-                _ => "알 수 없음"
+                _ => "Unknown"
             };
         }
 
@@ -123,11 +111,14 @@ namespace MGK_Analyzer.Services
         {
             return new List<ThemeType>
             {
-                ThemeType.Default,
                 ThemeType.MaterialLight,
-                ThemeType.MaterialDark,
-                ThemeType.FluentLight
+                ThemeType.MaterialDark
             };
+        }
+
+        private static ThemeType NormalizeTheme(ThemeType theme)
+        {
+            return theme == ThemeType.MaterialDark ? ThemeType.MaterialDark : ThemeType.MaterialLight;
         }
     }
 }

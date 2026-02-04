@@ -25,158 +25,146 @@
         </Grid.RowDefinitions>
 
         <!-- 메뉴바 -->
-        <Menu Grid.Row="0" Background="White" BorderBrush="LightGray" BorderThickness="0,0,0,1">
-            <MenuItem Header="파일(_F)" x:Name="FileMenu">
-                <MenuItem Header="새로 만들기(_N)" Click="NewFile_Click">
+        <Menu Grid.Row="0" Background="{DynamicResource {x:Static SystemColors.ControlBrushKey}}"
+              BorderBrush="{DynamicResource {x:Static SystemColors.ActiveBorderBrushKey}}" BorderThickness="0,0,0,1">
+            <MenuItem Header="File(_F)" x:Name="FileMenu">
+                <MenuItem Header="New(_N)" Click="NewFile_Click">
                     <MenuItem.Icon>
                         <Path Data="{StaticResource NewFileIcon}" Style="{StaticResource MenuIconStyle}" Fill="DodgerBlue"/>
                     </MenuItem.Icon>
                 </MenuItem>
-                <MenuItem Header="열기(_O)" Click="OpenFile_Click">
+                <MenuItem Header="Open(_O)" Click="OpenFile_Click">
                     <MenuItem.Icon>
                         <Path Data="{StaticResource OpenFileIcon}" Style="{StaticResource MenuIconStyle}" Fill="ForestGreen"/>
                     </MenuItem.Icon>
                 </MenuItem>
-                <MenuItem Header="저장(_S)" Click="SaveFile_Click">
+                <MenuItem Header="Save(_S)" Click="SaveFile_Click">
                     <MenuItem.Icon>
                         <Path Data="{StaticResource SaveIcon}" Style="{StaticResource MenuIconStyle}" Fill="Orange"/>
                     </MenuItem.Icon>
                 </MenuItem>
                 <Separator/>
-                <MenuItem Header="최근 파일(_R)"/>
+                <MenuItem Header="Recent Files(_R)"/>
                 <Separator/>
-                <MenuItem Header="끝내기(_X)" Click="Exit_Click"/>
+                <MenuItem Header="Exit(_X)" Click="Exit_Click"/>
             </MenuItem>
 
-            <MenuItem Header="데이터(_D)" x:Name="DataMenu">
-                <MenuItem Header="데이터 가져오기(_I)" Click="ImportData_Click">
+            <MenuItem Header="Data(_D)" x:Name="DataMenu">
+                <MenuItem Header="Import Data(_I)" Click="ImportData_Click">
                     <MenuItem.Icon>
                         <Path Data="{StaticResource ImportIcon}" Style="{StaticResource MenuIconStyle}" Fill="SteelBlue"/>
                     </MenuItem.Icon>
                 </MenuItem>
-                <MenuItem Header="데이터 내보내기(_E)" Click="ExportData_Click">
+                <MenuItem Header="Export Data(_E)" Click="ExportData_Click">
                     <MenuItem.Icon>
                         <Path Data="{StaticResource ExportIcon}" Style="{StaticResource MenuIconStyle}" Fill="Crimson"/>
                     </MenuItem.Icon>
                 </MenuItem>
                 <Separator/>
-            <MenuItem Header="데이터 분석(_A)" Click="AnalyzeData_Click">
+            <MenuItem Header="Analyze Data(_A)" Click="AnalyzeData_Click">
                     <MenuItem.Icon>
                         <Path Data="{StaticResource ChartIcon}" Style="{StaticResource MenuIconStyle}" Fill="Purple"/>
                     </MenuItem.Icon>
                 </MenuItem>
-                <MenuItem Header="데이터 필터링(_F)" Click="FilterData_Click"/>
+                <MenuItem Header="Filter Data(_F)" Click="FilterData_Click"/>
                 <Separator/>
             </MenuItem>
 
-            <MenuItem Header="프로젝트(_P)" x:Name="ProjectMenu">
-                <MenuItem Header="새 프로젝트(_N)" Click="NewProject_Click">
+            <MenuItem Header="Project(_P)" x:Name="ProjectMenu">
+                <MenuItem Header="New Project(_N)" Click="NewProject_Click">
                     <MenuItem.Icon>
                         <Path Data="{StaticResource ProjectIcon}" Style="{StaticResource MenuIconStyle}" Fill="DarkViolet"/>
                     </MenuItem.Icon>
                 </MenuItem>
-                <MenuItem Header="프로젝트 열기(_O)" Click="OpenProject_Click">
+                <MenuItem Header="Open Project(_O)" Click="OpenProject_Click">
                     <MenuItem.Icon>
                         <Path Data="{StaticResource FolderIcon}" Style="{StaticResource MenuIconStyle}" Fill="Goldenrod"/>
                     </MenuItem.Icon>
                 </MenuItem>
-                <MenuItem Header="프로젝트 저장(_S)" Click="SaveProject_Click"/>
+                <MenuItem Header="Save Project(_S)" Click="SaveProject_Click"/>
                 <Separator/>
-                <MenuItem Header="프로젝트 설정(_C)" Click="ProjectSettings_Click"/>
+                <MenuItem Header="Project Settings(_C)" Click="ProjectSettings_Click"/>
             </MenuItem>
 
-            <MenuItem Header="도구(_T)" x:Name="ToolsMenu">
-                <MenuItem Header="옵션(_O)" Click="Options_Click"/>
-                <MenuItem Header="설정(_S)" Click="Settings_Click">
+            <MenuItem Header="Tools(_T)" x:Name="ToolsMenu">
+                <MenuItem Header="Options(_O)" Click="Options_Click"/>
+                <MenuItem Header="Settings(_S)" Click="Settings_Click">
                     <MenuItem.Icon>
                         <Path Data="{StaticResource PaletteIcon}" Style="{StaticResource MenuIconStyle}" Fill="HotPink"/>
                     </MenuItem.Icon>
                 </MenuItem>
                 <Separator/>
-                <MenuItem Header="성능 로그 뷰어(_L)" Click="ShowLogViewer_Click">
+                <MenuItem Header="Performance Log Viewer(_L)" Click="ShowLogViewer_Click">
                     <MenuItem.Icon>
                         <Path Data="{StaticResource ChartIcon}" Style="{StaticResource MenuIconStyle}" Fill="Green"/>
                     </MenuItem.Icon>
                 </MenuItem>
             </MenuItem>
 
-            <MenuItem Header="도움말(_H)" x:Name="HelpMenu">
-                <MenuItem Header="정보(_A)" Click="About_Click"/>
+            <MenuItem Header="Help(_H)" x:Name="HelpMenu">
+                <MenuItem Header="About(_A)" Click="About_Click"/>
             </MenuItem>
         </Menu>
 
         <!-- 툴바 -->
-        <ToolBar Grid.Row="1" Background="White" BorderBrush="LightGray" BorderThickness="0,0,0,1">
-            <!-- Test Type Buttons -->
-            <Button x:Name="StandardTestButton" Click="StandardTest_Click" ToolTip="정격시험">
+        <ToolBar Grid.Row="1" Background="{DynamicResource {x:Static SystemColors.ControlBrushKey}}"
+                 BorderBrush="{DynamicResource {x:Static SystemColors.ActiveBorderBrushKey}}" BorderThickness="0,0,0,1">
+            <!-- Chart View Button -->
+            <Button x:Name="ChartViewButton" Click="ChartView_Click" ToolTip="Chart View">
                 <StackPanel Orientation="Horizontal">
-                    <Path Data="{StaticResource StandardTestIcon}" Style="{StaticResource ToolbarIconStyle}" Fill="Green"/>
-                    <TextBlock Text="정격시험" Margin="5,0" VerticalAlignment="Center"/>
-                </StackPanel>
-            </Button>
-            
-            <Button x:Name="LoadTestButton" Click="LoadTest_Click" ToolTip="부하시험">
-                <StackPanel Orientation="Horizontal">
-                    <Path Data="{StaticResource LoadTestIcon}" Style="{StaticResource ToolbarIconStyle}" Fill="OrangeRed"/>
-                    <TextBlock Text="부하시험" Margin="5,0" VerticalAlignment="Center"/>
-                </StackPanel>
-            </Button>
-            
-            <Button x:Name="NoLoadTestButton" Click="NoLoadTest_Click" ToolTip="무부하시험">
-                <StackPanel Orientation="Horizontal">
-                    <Path Data="{StaticResource NoLoadTestIcon}" Style="{StaticResource ToolbarIconStyle}" Fill="DodgerBlue"/>
-                    <TextBlock Text="무부하시험" Margin="5,0" VerticalAlignment="Center"/>
+                    <Path Data="{StaticResource ChartIcon}" Style="{StaticResource ToolbarIconStyle}" Fill="Green"/>
+                    <TextBlock Text="Chart View" Margin="5,0" VerticalAlignment="Center"/>
                 </StackPanel>
             </Button>
             
             <!-- 새 NT-Curve 시험 버튼 추가 -->
-            <Button x:Name="NtCurveTestButton" Click="NtCurveTest_Click" ToolTip="NT-Curve 시험">
+            <Button x:Name="NtCurveTestButton" Click="NtCurveTest_Click" ToolTip="NT-Curve Test">
                 <StackPanel Orientation="Horizontal">
                     <Path Data="{StaticResource ChartIcon}" Style="{StaticResource ToolbarIconStyle}" Fill="MediumPurple"/>
-                    <TextBlock Text="NT-Curve시험" Margin="5,0" VerticalAlignment="Center"/>
+                    <TextBlock Text="NT-Curve Test" Margin="5,0" VerticalAlignment="Center"/>
                 </StackPanel>
             </Button>
             
             <Separator/>
             
             <!-- New: 효율맵2D (Contour) -->
-            <Button x:Name="Contour2DButton" Click="CreateContour2DChart_Click" ToolTip="효율맵2D">
+            <Button x:Name="Contour2DButton" Click="CreateContour2DChart_Click" ToolTip="Efficiency Map 2D">
                 <StackPanel Orientation="Horizontal">
                     <Path Data="{StaticResource ChartIcon}" Style="{StaticResource ToolbarIconStyle}" Fill="DarkCyan"/>
-                    <TextBlock Text="효율맵2D" Margin="5,0" VerticalAlignment="Center"/>
+                    <TextBlock Text="Efficiency Map 2D" Margin="5,0" VerticalAlignment="Center"/>
                 </StackPanel>
             </Button>
             
             <!-- New: 효율맵3D (Surface) -->
-            <Button x:Name="Surface3DButton" Click="CreateSurface3DChart_Click" ToolTip="효율맵3D">
+            <Button x:Name="Surface3DButton" Click="CreateSurface3DChart_Click" ToolTip="Efficiency Map 3D">
                 <StackPanel Orientation="Horizontal">
                     <Path Data="{StaticResource ChartIcon}" Style="{StaticResource ToolbarIconStyle}" Fill="DarkOrange"/>
-                    <TextBlock Text="효율맵3D" Margin="5,0" VerticalAlignment="Center"/>
+                    <TextBlock Text="Efficiency Map 3D" Margin="5,0" VerticalAlignment="Center"/>
                 </StackPanel>
             </Button>
             
             <Separator/>
             
-            <Button x:Name="AnalyzeButton" Click="AnalyzeData_Click" ToolTip="데이터 분석">
+            <Button x:Name="AnalyzeButton" Click="AnalyzeData_Click" ToolTip="Analyze Data">
                 <StackPanel Orientation="Horizontal">
                     <Path Data="{StaticResource ChartIcon}" Style="{StaticResource ToolbarIconStyle}" Fill="Purple"/>
-                    <TextBlock Text="분석" Margin="5,0" VerticalAlignment="Center"/>
+                    <TextBlock Text="Analyze" Margin="5,0" VerticalAlignment="Center"/>
                 </StackPanel>
             </Button>
             
-            <Button x:Name="ProjectButton" Click="NewProject_Click" ToolTip="새 프로젝트">
+            <Button x:Name="ProjectButton" Click="NewProject_Click" ToolTip="New Project">
                 <StackPanel Orientation="Horizontal">
                     <Path Data="{StaticResource ProjectIcon}" Style="{StaticResource ToolbarIconStyle}" Fill="DarkViolet"/>
-                    <TextBlock Text="프로젝트" Margin="5,0" VerticalAlignment="Center"/>
+                    <TextBlock Text="Project" Margin="5,0" VerticalAlignment="Center"/>
                 </StackPanel>
             </Button>
             
             <Separator/>
             
-            <Button x:Name="ThemeButton" Click="Settings_Click" ToolTip="테마 설정">
+            <Button x:Name="ThemeButton" Click="Settings_Click" ToolTip="Theme Settings">
                 <StackPanel Orientation="Horizontal">
                     <Path Data="{StaticResource PaletteIcon}" Style="{StaticResource ToolbarIconStyle}" Fill="HotPink"/>
-                    <TextBlock Text="테마" Margin="5,0" VerticalAlignment="Center"/>
+                    <TextBlock Text="Theme" Margin="5,0" VerticalAlignment="Center"/>
                 </StackPanel>
             </Button>
 
@@ -216,7 +204,7 @@
             
             <!-- 환영 메시지 (윈도우가 없을 때만 표시) -->
             <TextBlock x:Name="WelcomeMessage" 
-                       Text="데이터 → 데이터 가져오기를 선택하여 CSV 파일을 로드하거나&#x0a;툴바의 버튼을 클릭하여 새 차트를 생성하세요" 
+                       Text="" 
                        FontSize="18" 
                        FontWeight="Light"
                        HorizontalAlignment="Center" 
@@ -225,10 +213,25 @@
                        Foreground="Gray"
                        TextWrapping="Wrap"
                        IsHitTestVisible="False"/>
+
+            <Grid x:Name="ChartLoadingOverlay"
+                  Background="#80000000"
+                  Visibility="Collapsed"
+                  Panel.ZIndex="10">
+                <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                    <ProgressBar Width="220" Height="6" IsIndeterminate="True"/>
+                    <TextBlock Text="Loading chart..."
+                               Margin="0,12,0,0"
+                               Foreground="White"
+                               FontSize="14"
+                               HorizontalAlignment="Center"/>
+                </StackPanel>
+            </Grid>
         </Grid>
 
         <!-- 상태바 -->
-        <StatusBar Grid.Row="3" Background="White" BorderBrush="LightGray" BorderThickness="0,1,0,0">
+        <StatusBar Grid.Row="3" Background="{DynamicResource {x:Static SystemColors.ControlBrushKey}}"
+                   BorderBrush="{DynamicResource {x:Static SystemColors.ActiveBorderBrushKey}}" BorderThickness="0,1,0,0">
             <StatusBarItem>
                 <TextBlock x:Name="StatusText" Text="준비"/>
             </StatusBarItem>

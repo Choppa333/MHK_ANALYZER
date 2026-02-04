@@ -15,6 +15,7 @@ using System.Windows.Media;
 using System.Windows.Media.Animation;
 using System.Windows.Controls.Primitives;
 using System.Windows.Threading;
+using System.Windows.Media.Imaging;
 using Microsoft.Win32;
 using System.IO;
 using System.Reflection;
@@ -67,6 +68,7 @@ namespace MGK_Analyzer.Controls
 		private readonly DispatcherTimer _cursorResumeTimer;
 		private bool _cursorLayoutPending;
 		private bool _suspendCursorRefresh;
+		private ChartCursorHandle? _activeCursorHandle;
             private static readonly Brush[] CursorColorPalette =
             {
                 Brushes.Crimson,
@@ -84,6 +86,15 @@ namespace MGK_Analyzer.Controls
 		private bool _overlayTransformDirty = true;
 		private double _overlayOffsetX;
 		private double _overlayOffsetY;
+        private string _metaTypeDisplay = "N/A";
+        private string _metaDateDisplay = "N/A";
+        private static readonly Dictionary<int, string> MetaTypeDisplayMap = new()
+        {
+            { 0, "Rated Test" },
+            { 1, "Load Test" },
+            { 2, "No-Load Test" },
+            { 4, "NT-Curve" }
+        };
         
         // 윈도우 크기 상태 저장
         private double _normalWidth = 800;
@@ -111,6 +122,18 @@ namespace MGK_Analyzer.Controls
             set { SetValue(WindowTitleProperty, value); OnPropertyChanged(); }
         }
 
+        public string MetaTypeDisplay
+        {
+            get => _metaTypeDisplay;
+            private set { _metaTypeDisplay = value; OnPropertyChanged(); }
+        }
+
+        public string MetaDateDisplay
+        {
+            get => _metaDateDisplay;
+            private set { _metaDateDisplay = value; OnPropertyChanged(); }
+        }
+
         public DataView? DataTableView
         {
             get => _dataTableView;
@@ -134,7 +157,54 @@ namespace MGK_Analyzer.Controls
                     OnPropertyChanged();
                 }
             }
-		}
+        }
+
+        private void SaveChartAsImage_Click(object sender, RoutedEventArgs e)
+        {
+            if (ChartControl == null)
+            {
+                return;
+            }
+
+            var saveDialog = new SaveFileDialog
+            {
+                Filter = "JPEG Image (*.jpg)|*.jpg",
+                DefaultExt = ".jpg",
+                FileName = string.IsNullOrWhiteSpace(WindowTitle) ? "Chart" : WindowTitle.Replace(' ', '_')
+            };
+
+            if (saveDialog.ShowDialog() != true)
+            {
+                return;
+            }
+
+            try
+            {
+                ChartControl.UpdateLayout();
+                var width = (int)Math.Max(1, ChartControl.ActualWidth);
+                var height = (int)Math.Max(1, ChartControl.ActualHeight);
+
+                var renderTarget = new RenderTargetBitmap(width, height, 96, 96, PixelFormats.Pbgra32);
+                var visual = new DrawingVisual();
+                using (var context = visual.RenderOpen())
+                {
+                    context.DrawRectangle(Brushes.White, null, new Rect(0, 0, width, height));
+                    var brush = new VisualBrush(ChartControl);
+                    context.DrawRectangle(brush, null, new Rect(0, 0, width, height));
+                }
+                renderTarget.Render(visual);
+
+                var encoder = new JpegBitmapEncoder { QualityLevel = 90 };
+                encoder.Frames.Add(BitmapFrame.Create(renderTarget));
+
+                using var stream = new FileStream(saveDialog.FileName, FileMode.Create, FileAccess.Write);
+                encoder.Save(stream);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Failed to save image: {ex.Message}", "Save as Image", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
 
 		private static void ApplyAxisHiddenStyle(ChartAxis axis)
 		{
@@ -377,11 +447,38 @@ namespace MGK_Analyzer.Controls
                 _dataSet = value; 
                 OnPropertyChanged();
 				RebuildDataValueRangeCache();
+                UpdateMetaInfo();
                 
                 PerformanceLogger.Instance.LogInfo($"차트 데이터 설정 - 파일: {value?.FileName}, 시리즈: {value?.SeriesData?.Count}", "Chart_Display");
                 InitializeSeriesList();
                 RebuildDataTableViewAsync();
             }
+        }
+
+        private void UpdateMetaInfo()
+        {
+            if (_dataSet == null)
+            {
+                MetaTypeDisplay = "N/A";
+                MetaDateDisplay = "N/A";
+                return;
+            }
+
+            if (_dataSet.MetaType.HasValue)
+            {
+                var typeValue = _dataSet.MetaType.Value;
+                MetaTypeDisplay = MetaTypeDisplayMap.TryGetValue(typeValue, out var label)
+                    ? $"{typeValue} - {label}"
+                    : $"Unknown ({typeValue})";
+            }
+            else
+            {
+                MetaTypeDisplay = "N/A";
+            }
+
+            MetaDateDisplay = !string.IsNullOrWhiteSpace(_dataSet.MetaDateRaw)
+                ? _dataSet.MetaDateRaw
+                : "N/A";
         }
 
         public void SetInitialSeriesSelection(IEnumerable<string>? seriesNames)
@@ -1288,25 +1385,6 @@ namespace MGK_Analyzer.Controls
 
             var cursorBrush = GetCursorColorByIndex(_cursorHandles.Count);
 
-            var annotation = new VerticalLineAnnotation
-            {
-				X1 = cursorSeconds,
-				X2 = cursorSeconds,
-                Y1 = minValue,
-                Y2 = maxValue,
-                Stroke = cursorBrush,
-				StrokeThickness = 3.5,
-				CanDrag = true,
-				CanResize = false,
-				DraggingMode = AxisMode.Horizontal
-            };
-
-			// Keep annotation barely visible so it remains hit-testable for drag.
-			// (A fully transparent stroke prevents interaction in this Syncfusion build.)
-			annotation.Opacity = 0.01;
-
-            ChartControl.Annotations?.Add(annotation);
-
             var snapshot = new CursorSnapshotViewModel
             {
                 CursorIndex = _cursorHandles.Count + 1,
@@ -1314,13 +1392,12 @@ namespace MGK_Analyzer.Controls
             };
             SnapshotList.Add(snapshot);
 
-            var handle = new ChartCursorHandle
-            {
-                Annotation = annotation,
-                Index = cursorIndex,
-                Snapshot = snapshot,
-                CursorBrush = cursorBrush
-            };
+			var handle = new ChartCursorHandle
+			{
+				Index = cursorIndex,
+				Snapshot = snapshot,
+				CursorBrush = cursorBrush
+			};
 			handle.OverlayLine = CreateCursorOverlayLine(cursorBrush);
 			var caps = CreateCursorOverlayCaps(cursorBrush);
 			if (caps.HasValue)
@@ -1328,11 +1405,18 @@ namespace MGK_Analyzer.Controls
 				handle.OverlayTopCap = caps.Value.top;
 				handle.OverlayBottomCap = caps.Value.bottom;
 			}
-			annotation.Tag = handle;
-			annotation.DragDelta += CursorAnnotation_DragDelta;
-			annotation.DragCompleted += CursorAnnotation_DragCompleted;
-			annotation.MouseLeftButtonDown += CursorAnnotation_MouseLeftButtonDown;
-			annotation.MouseLeftButtonUp += CursorAnnotation_MouseLeftButtonUp;
+			if (handle.OverlayLine != null)
+			{
+				handle.OverlayLine.Tag = handle;
+			}
+			if (handle.OverlayTopCap != null)
+			{
+				handle.OverlayTopCap.Tag = handle;
+			}
+			if (handle.OverlayBottomCap != null)
+			{
+				handle.OverlayBottomCap.Tag = handle;
+			}
             _cursorHandles.Add(handle);
             UpdateSnapshotForHandle(handle);
             RefreshSnapshotOrdering();
@@ -1347,7 +1431,6 @@ namespace MGK_Analyzer.Controls
             var lastCursor = _cursorHandles[^1];
             _cursorHandles.RemoveAt(_cursorHandles.Count - 1);
 			DetachCursorAnnotation(lastCursor);
-			ChartControl.Annotations?.Remove(lastCursor.Annotation);
 			DetachOverlayLine(lastCursor);
 			DetachOverlayCaps(lastCursor);
             if (lastCursor.Snapshot != null)
@@ -1473,17 +1556,7 @@ namespace MGK_Analyzer.Controls
                 maxValue = minValue + 1;
             }
 
-            if (handle.Annotation != null)
-            {
-				handle.Annotation.X1 = cursorSeconds;
-				handle.Annotation.X2 = cursorSeconds;
-                handle.Annotation.Y1 = minValue;
-                handle.Annotation.Y2 = maxValue;
-				handle.Annotation.StrokeThickness = 3.5;
-				handle.Annotation.Opacity = 0.01;
-            }
-
-			UpdateOverlayLine(handle);
+			UpdateOverlayLine(handle, cursorSeconds);
 
 			if (!handle.IsDragging)
 			{
@@ -2062,8 +2135,14 @@ namespace MGK_Analyzer.Controls
 				StrokeStartLineCap = PenLineCap.Round,
 				StrokeEndLineCap = PenLineCap.Round,
 				StrokeDashCap = PenLineCap.Round,
-				SnapsToDevicePixels = true
+				SnapsToDevicePixels = true,
+				IsHitTestVisible = true
 			};
+
+			line.Tag = null;
+			line.MouseLeftButtonDown += OverlayElement_MouseLeftButtonDown;
+			line.MouseMove += OverlayElement_MouseMove;
+			line.MouseLeftButtonUp += OverlayElement_MouseLeftButtonUp;
 
 			_cursorOverlay.Children.Add(line);
 			return line;
@@ -2085,12 +2164,19 @@ namespace MGK_Analyzer.Controls
 					Fill = stroke,
 					Stroke = stroke,
 					StrokeThickness = 0,
-					SnapsToDevicePixels = true
+					SnapsToDevicePixels = true,
+					IsHitTestVisible = true
 				};
 			}
 
 			var top = CreateCap();
 			var bottom = CreateCap();
+			top.MouseLeftButtonDown += OverlayElement_MouseLeftButtonDown;
+			top.MouseMove += OverlayElement_MouseMove;
+			top.MouseLeftButtonUp += OverlayElement_MouseLeftButtonUp;
+			bottom.MouseLeftButtonDown += OverlayElement_MouseLeftButtonDown;
+			bottom.MouseMove += OverlayElement_MouseMove;
+			bottom.MouseLeftButtonUp += OverlayElement_MouseLeftButtonUp;
 			_cursorOverlay.Children.Add(top);
 			_cursorOverlay.Children.Add(bottom);
 			return (top, bottom);
@@ -2126,9 +2212,9 @@ namespace MGK_Analyzer.Controls
 			}
 		}
 
-		private void UpdateOverlayLine(ChartCursorHandle handle)
+		private void UpdateOverlayLine(ChartCursorHandle handle, double? axisValue = null)
 		{
-			if (ChartControl == null || _cursorOverlay == null)
+			if (ChartControl == null || _cursorOverlay == null || DataSet == null)
 			{
 				return;
 			}
@@ -2139,14 +2225,9 @@ namespace MGK_Analyzer.Controls
 				return;
 			}
 
-			if (handle.Annotation == null)
-			{
-				line.Visibility = Visibility.Collapsed;
-				return;
-			}
-
-			var cursorTime = handle.Annotation.X1;
-			var plotX = GetCursorPixelX(cursorTime);
+			var sampleIndex = (int)Math.Clamp(Math.Round(handle.Index), 0, Math.Max(0, DataSet.TotalSamples - 1));
+			var cursorSeconds = axisValue ?? (DataSet.TotalSamples > 0 ? DataSet.GetRelativeTimeAt(sampleIndex) : 0.0);
+			var plotX = GetCursorPixelX(cursorSeconds);
 			if (plotX == null)
 			{
 				line.Visibility = Visibility.Collapsed;
@@ -2206,6 +2287,110 @@ namespace MGK_Analyzer.Controls
 				Canvas.SetLeft(handle.OverlayBottomCap, chartToOverlay - capSize / 2);
 				Canvas.SetTop(handle.OverlayBottomCap, Math.Max(0, height) - capSize / 2);
 			}
+		}
+
+		private void OverlayElement_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+		{
+			if (sender is not FrameworkElement element || element.Tag is not ChartCursorHandle handle || ChartControl == null)
+			{
+				return;
+			}
+
+			_activeCursorHandle = handle;
+			handle.IsDragging = true;
+			e.Handled = true;
+			element.CaptureMouse();
+			StartCursorSnapshotTimer();
+			UpdateCursorFromPointer(e.GetPosition(ChartControl), handle, forceSnapshot: true);
+		}
+
+		private void OverlayElement_MouseMove(object sender, MouseEventArgs e)
+		{
+			if (_activeCursorHandle == null || !(_activeCursorHandle.IsDragging) || ChartControl == null)
+			{
+				return;
+			}
+
+			if (e.LeftButton != MouseButtonState.Pressed)
+			{
+				return;
+			}
+
+			UpdateCursorFromPointer(e.GetPosition(ChartControl), _activeCursorHandle, forceSnapshot: false);
+		}
+
+		private void OverlayElement_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
+		{
+			if (_activeCursorHandle == null)
+			{
+				return;
+			}
+
+			_activeCursorHandle.IsDragging = false;
+			e.Handled = true;
+			if (sender is UIElement element)
+			{
+				element.ReleaseMouseCapture();
+			}
+			StopCursorSnapshotTimer();
+			RefreshAllSnapshots();
+			_activeCursorHandle = null;
+		}
+
+		private void UpdateCursorFromPointer(Point pointer, ChartCursorHandle handle, bool forceSnapshot)
+		{
+			if (!TryGetAxisValueFromPixel(pointer.X, out var axisValue) || !TryConvertAxisValueToIndex(axisValue, out var targetIndex))
+			{
+				return;
+			}
+
+			handle.Index = targetIndex;
+			UpdateCursorAnnotation(handle);
+			if (forceSnapshot)
+			{
+				UpdateSnapshotForHandle(handle, allowWhileDragging: true);
+			}
+			else
+			{
+				MarkCursorSnapshotDirty();
+			}
+		}
+
+		private bool TryGetAxisValueFromPixel(double pixelX, out double axisValue)
+		{
+			axisValue = 0;
+			if (ChartControl == null)
+			{
+				return false;
+			}
+
+			var range = ChartControl.PrimaryAxis?.VisibleRange;
+			var start = range?.Start ?? double.NaN;
+			var end = range?.End ?? double.NaN;
+			if (double.IsNaN(start) || double.IsNaN(end) || end <= start)
+			{
+				return false;
+			}
+
+			double plotX;
+			try
+			{
+				var clip = ChartControl.SeriesClipRect;
+				plotX = clip.Width > 0 ? (pixelX - clip.X) / clip.Width : double.NaN;
+			}
+			catch
+			{
+				return false;
+			}
+
+			if (double.IsNaN(plotX) || double.IsInfinity(plotX))
+			{
+				return false;
+			}
+
+			plotX = Math.Clamp(plotX, 0, 1);
+			axisValue = start + (end - start) * plotX;
+			return true;
 		}
 
 		private bool EnsureOverlayTransformCache()
