@@ -215,7 +215,7 @@
                        IsHitTestVisible="False"/>
 
             <Grid x:Name="ChartLoadingOverlay"
-                  Background="#80000000"
+                  Background="#CCFFFFFF"
                   Visibility="Collapsed"
                   Panel.ZIndex="10">
                 <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">

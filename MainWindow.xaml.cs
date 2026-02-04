@@ -313,7 +313,7 @@ namespace MGK_Analyzer
                 MemoryOptimizedDataSet dataSet;
                 using (var csvTimer = PerformanceLogger.Instance.StartTimer("CSV 파일 로딩", "Data_Import"))
                 {
-                    dataSet = await _csvLoader.LoadCsvDataAsync(filePath, progress, expectedMetaType, requireMetaTypeMatch);
+                    dataSet = await Task.Run(() => _csvLoader.LoadCsvDataAsync(filePath, progress, expectedMetaType, requireMetaTypeMatch));
                 }
 
                 if (supportedMetaTypes != null)

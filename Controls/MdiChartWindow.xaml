@@ -377,7 +377,7 @@
 
                             <Canvas x:Name="CursorOverlay"
                                     Panel.ZIndex="10"
-                                    IsHitTestVisible="False"
+                                    IsHitTestVisible="True"
                                     Width="{Binding ActualWidth, ElementName=ChartControl}"
                                     Height="{Binding ActualHeight, ElementName=ChartControl}"/>
                         </Grid>
